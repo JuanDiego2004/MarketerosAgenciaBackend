@@ -37,8 +37,9 @@ public class MapeoRespuestaUsuario {
     public String rutaInicial(String nombreRol) {
         String normalizado = normalizar(nombreRol);
         if (normalizado.contains("ANALISTA") || normalizado.contains("MARKETING")
-                || normalizado.contains("PROJECT MANAGER")) return "/campanas";
-        if (normalizado.contains("ADMIN") || normalizado.contains("GERENTE")) return "/usuarios";
+                || normalizado.contains("PROJECT MANAGER") || normalizado.contains("OPERADOR")
+                || normalizado.contains("LIDER")) return "/dashboard";
+        if (normalizado.contains("ADMIN") || normalizado.contains("GERENTE")) return "/dashboard";
         return "/inicio";
     }
 

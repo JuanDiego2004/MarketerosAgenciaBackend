@@ -8,9 +8,12 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class ManejadorErroresApi {
+    private static final Logger registro = LoggerFactory.getLogger(ManejadorErroresApi.class);
 
     @ExceptionHandler(ExcepcionApi.class)
     public ResponseEntity<ApiRespuesta<Void>> manejarErrorApi(ExcepcionApi excepcion) {
@@ -31,6 +34,7 @@ public class ManejadorErroresApi {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiRespuesta<Void>> manejarErrorInesperado(Exception excepcion) {
+        registro.error("Error interno al procesar la solicitud", excepcion);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiRespuesta.error("Ocurrió un error interno", "ERROR_INTERNO"));
     }

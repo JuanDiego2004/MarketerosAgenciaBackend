@@ -10,6 +10,9 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 import java.util.List;
 
@@ -29,10 +32,17 @@ public class SeguridadConfig {
     }
 
     @Bean
+    public JwtDecoder decodificadorJwt(@Value("${supabase.url}") String urlSupabase) {
+        return NimbusJwtDecoder.withJwkSetUri(urlSupabase + "/auth/v1/.well-known/jwks.json")
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
+    }
+
+    @Bean
     public SecurityFilterChain cadenaSeguridad(
             HttpSecurity seguridadHttp,
             CorsConfigurationSource configuracionCORS,
-            @Value("${supabase.url}") String urlSupabase) throws Exception {
+            JwtDecoder decodificadorJwt) throws Exception {
         return seguridadHttp
                 .cors(cors -> cors.configurationSource(configuracionCORS))
                 .csrf(csrf -> csrf.disable())
@@ -42,7 +52,7 @@ public class SeguridadConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
-                        .jwkSetUri(urlSupabase + "/auth/v1/.well-known/jwks.json")))
+                        .decoder(decodificadorJwt)))
                 .build();
     }
 
