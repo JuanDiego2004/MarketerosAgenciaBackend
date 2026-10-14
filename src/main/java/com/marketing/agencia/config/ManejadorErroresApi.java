@@ -1,6 +1,7 @@
 package com.marketing.agencia.config;
 
 import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.net.URI;
+import java.nio.file.InvalidPathException;
 
 @RestControllerAdvice
 public class ManejadorErroresApi {
@@ -68,6 +72,25 @@ public class ManejadorErroresApi {
                 .body(ApiRespuesta.error(
                         "El método HTTP no está permitido para este endpoint",
                         "METODO_NO_PERMITIDO"
+                ));
+    }
+
+    @ExceptionHandler(InvalidPathException.class)
+    public ResponseEntity<?> manejarRutaInvalida(
+            InvalidPathException excepcion,
+            HttpServletRequest solicitud) {
+
+        // Tolera los asteriscos de cierre que se colaron en el enlace de Swagger.
+        if (solicitud.getRequestURI().endsWith("/swagger-ui/index.html**")) {
+            return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
+                    .location(URI.create("/swagger-ui/index.html"))
+                    .build();
+        }
+
+        return ResponseEntity.badRequest()
+                .body(ApiRespuesta.error(
+                        "La ruta solicitada contiene caracteres inválidos",
+                        "RUTA_INVALIDA"
                 ));
     }
 

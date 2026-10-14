@@ -6,6 +6,7 @@ import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
 import com.marketing.agencia.Auth.mapper.MapeoRespuestaUsuario;
 import com.marketing.agencia.Auth.servicios.SupabaseAuthServicio;
 import com.marketing.agencia.Usuario.dto.Requests.CrearUsuarioRequest;
+import com.marketing.agencia.Usuario.dto.Requests.EditarUsuarioRequest;
 import com.marketing.agencia.Usuario.entidad.Rol;
 import com.marketing.agencia.Usuario.entidad.Usuario;
 import com.marketing.agencia.Usuario.repositorio.RolRepositorio;
@@ -129,6 +130,17 @@ public class UsuarioServicio {
         Usuario actualizado = usuarioRepositorio.saveAndFlush(usuario);
 
         return mapeoRespuestaUsuario.mapear(actualizado);
+    }
+
+    @Transactional
+    public UsuarioRespuesta actualizar(Long id, EditarUsuarioRequest request, UUID idSupabaseSolicitante) {
+        validarAdministrador(idSupabaseSolicitante);
+        Usuario usuario = buscarUsuario(id);
+        Rol rol = rolRepositorio.findById(request.idRol())
+                .orElseThrow(() -> new ExcepcionApi(HttpStatus.BAD_REQUEST, "ROL_INVALIDO", "El rol indicado no existe"));
+        usuario.setNombres(request.nombres().trim());
+        usuario.setRol(rol);
+        return mapeoRespuestaUsuario.mapear(usuarioRepositorio.saveAndFlush(usuario));
     }
 
     private Usuario buscarUsuario(Long id) {

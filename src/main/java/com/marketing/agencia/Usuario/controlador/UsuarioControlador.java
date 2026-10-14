@@ -5,6 +5,7 @@ import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
 import com.marketing.agencia.Auth.dto.response.UsuarioCreadoRespuesta;
 import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
 import com.marketing.agencia.Usuario.dto.Requests.CrearUsuarioRequest;
+import com.marketing.agencia.Usuario.dto.Requests.EditarUsuarioRequest;
 import com.marketing.agencia.Usuario.servicio.UsuarioServicio;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +79,15 @@ public class UsuarioControlador {
                         )
                 )
         );
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiRespuesta<UsuarioRespuesta>> actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody EditarUsuarioRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(ApiRespuesta.exito("Usuario actualizado",
+                usuarioServicio.actualizar(id, request, obtenerIdSupabase(jwt))));
     }
 
     private UUID obtenerIdSupabase(Jwt jwt) {
