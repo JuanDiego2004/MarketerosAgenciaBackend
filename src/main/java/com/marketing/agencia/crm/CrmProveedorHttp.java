@@ -15,7 +15,7 @@ import static com.marketing.agencia.crm.CrmOperacionServicio.invalido;
 public class CrmProveedorHttp {
     private final ObjectMapper json;
     private final HttpClient cliente=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
-    private static final Set<String> HOSTS=Set.of("oauth2.googleapis.com","googleads.googleapis.com","analyticsdata.googleapis.com","graph.facebook.com","api.twilio.com");
+    private static final Set<String> HOSTS=Set.of("oauth2.googleapis.com","googleads.googleapis.com","analyticsdata.googleapis.com","graph.facebook.com","api.twilio.com","api.mockaroo.com");
     public JsonNode post(String url,Map<String,String>cabeceras,Object cuerpo,boolean formulario){
         URI u=URI.create(url);if(!"https".equals(u.getScheme())||!HOSTS.contains(u.getHost())||u.getUserInfo()!=null||u.getPort()!=-1)throw invalido("Destino de integración no admitido");
         try{

@@ -86,3 +86,11 @@ Desactivar automatizaciones y la suscripción del webhook antes de volver a un b
 Verificación local: `mvnw -DskipTests package` completado con Java 25; `render.yaml` analizado correctamente con SnakeYAML; cambios sin errores de espacios en `git diff --check`. No se ejecutó `docker build` porque este entorno no tiene Docker/Podman disponibles. No se desplegó ni creó ningún servicio en Render.
 
 [Docker en Render](https://render.com/docs/docker), [puerto y dirección de escucha](https://render.com/docs/web-services#port-binding), [comprobaciones de salud](https://render.com/docs/health-checks), [Blueprint](https://render.com/docs/blueprint-spec), [límites del plan gratuito](https://render.com/docs/free).
+# Publicidad de demostración con Mockaroo
+
+En **Environment**, configurar `CRM_MOCKAROO_HABILITADO=true` y `CRM_MOCKAROO_API_KEY` con la clave privada de Mockaroo. La clave permanece en el backend. El `.env` local no configura Render.
+
+Desplegar el backend y el frontend actualizados. Aplicar `src/main/resources/sql/crm-v7.sql` después de las migraciones anteriores, o el auxiliar `scripts/PrepararCrm.java --aplicar`. Docker no aplica migraciones al arrancar. La migración añade dos tablas de demostración con RLS y conserva todos los datos anteriores.
+
+La pantalla se encuentra en **Métricas → Publicidad de demostración**. Hasta 90 días y 9 países por campaña: 810 filas por descarga, con reutilización de días guardados. No se requiere publicar anuncios ni conectar Meta/TikTok/YouTube para esta demostración. Eliminar las variables o establecer `CRM_MOCKAROO_HABILITADO=false` conserva el histórico y bloquea nuevas descargas.
+
