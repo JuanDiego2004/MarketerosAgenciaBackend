@@ -44,7 +44,7 @@ public class CrmOperacionServicio {
         m.put("responsables",jdbc.queryForList("select id_usuario id,nombres nombre from public.usuario where upper(estado)='ACTIVO' and (?=false or id_usuario=?) order by nombres limit 1000",propio,usuario));
         m.put("campanas",jdbc.queryForList("select id_campana id,nombre from public.campana order by nombre limit 1000"));
         m.put("segmentos",jdbc.queryForList("select id,nombre from public.crm_segmento order by nombre limit 1000"));
-        m.put("cuentas",propio?List.of():jdbc.queryForList("select id,nombre from public.crm_cuenta order by nombre limit 1000"));
+        m.put("cuentas",propio?List.of():jdbc.queryForList("select id,nombre from public.crm_cuenta where fusionada_en is null order by nombre limit 1000"));
         m.put("oportunidades",propio?List.of():jdbc.queryForList("select id,nombre from public.crm_oportunidad order by nombre limit 1000"));
         m.put("usuarioId",usuario);
         return m;

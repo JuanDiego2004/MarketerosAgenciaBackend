@@ -55,7 +55,7 @@ class CrmPostgresTests {
         assertTrue(captacion.formulario(formularioId,Map.of()).contains("Formulario prueba rollback"));
         String externo=Long.toString(System.currentTimeMillis());
         var vinculo=Map.<String,Object>of("nombre","Meta prueba rollback","campana_id",campana,"campana_externa",externo);
-        operaciones.guardar("integraciones",null,vinculo,sujeto);
-        assertThrows(com.marketing.agencia.config.ExcepcionApi.class,()->operaciones.guardar("integraciones",null,vinculo,sujeto));
+        var retirado=assertThrows(com.marketing.agencia.config.ExcepcionApi.class,()->operaciones.guardar("integraciones",null,vinculo,sujeto));
+        assertEquals(org.springframework.http.HttpStatus.GONE,retirado.getEstadoHttp());
     }
 }

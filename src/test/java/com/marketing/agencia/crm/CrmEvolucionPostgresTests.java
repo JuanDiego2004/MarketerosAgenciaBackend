@@ -32,6 +32,7 @@ class CrmEvolucionPostgresTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired CrmServicio contactos;
+    @Autowired com.marketing.agencia.administrador.clientes.servicios.ClienteServicio clientesAnteriores;
     @Autowired CrmOperacionServicio operaciones;
     @Autowired CrmEvolucionServicio evolucion;
     @Autowired CrmIntegraciones integraciones;
@@ -130,6 +131,45 @@ class CrmEvolucionPostgresTests {
         long contenido=solicitud(analista,"POST","/api/crm/operaciones/contenido",pieza,201).path("datos").path("id").asLong();
         pieza.put("version",0);pieza.put("estado","EN_REVISION");solicitud(analista,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,200);
         pieza.put("version",1);pieza.put("estado","APROBADO");solicitud(analista,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,403);solicitud(lider,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,200);
+    }
+    @Test void empresaUnificadaSeCreaUnaVezYConservaArchivoEHistorial()throws Exception{
+        String nombre="Empresa unificada "+UUID.randomUUID();
+        var datos=new HashMap<String,Object>(Map.of("nombre",nombre,"correo",UUID.randomUUID()+"@example.test","telefono","51912345678","sector","Salud","sitioWeb","https://example.test","estado","ACTIVO"));
+        long cuenta=solicitud(admin,"POST","/api/crm/cuentas",datos,201).path("datos").path("id").asLong();
+        long cliente=jdbc.queryForObject("select cliente_id from public.crm_cuenta where id=?",Long.class,cuenta);
+        assertEquals(nombre,clientesAnteriores.buscarPorId(cliente).nombre());
+        assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_cuenta where cliente_id=? and fusionada_en is null",Integer.class,cliente));
+        solicitud(admin,"POST","/api/crm/cuentas",datos,409);
+        solicitud(admin,"POST","/api/crm/cuentas/"+cuenta+"/notas",Map.of("texto","Conservar seguimiento"),200);
+        solicitud(admin,"POST","/api/crm/cuentas/"+cuenta+"/archivar",null,200);
+        var ficha=solicitud(admin,"GET","/api/crm/cuentas/"+cuenta,null,200).path("datos");
+        assertEquals("INACTIVO",ficha.path("estado").asText());assertEquals(1,ficha.path("notas").size());
+        assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_auditoria where recurso='cuentas' and registro_id=? and accion='ARCHIVAR'",Integer.class,cuenta));
+        datos.put("estado","ACTIVO");datos.put("nombre",nombre+" renovada");solicitud(admin,"PUT","/api/crm/cuentas/"+cuenta,datos,200);
+        // JdbcTemplate y JPA comparten transacción; la lectura SQL comprueba la actualización actual.
+        assertEquals(nombre+" renovada",jdbc.queryForObject("select nombre from public.cliente where id_cliente=?",String.class,cliente));
+        solicitud(analista,"POST","/api/crm/cuentas",datos,403);
+    }
+    @Test void clienteAnteriorRecibeFichaAutomaticamenteYEdicionCompartida()throws Exception{
+        var request=new com.marketing.agencia.administrador.clientes.dto.ClienteRequest("Empresa anterior",UUID.randomUUID()+"@example.test","51912345679");
+        long cliente=clientesAnteriores.crear(request).idCliente();
+        long cuenta=jdbc.queryForObject("select id from public.crm_cuenta where cliente_id=? and fusionada_en is null",Long.class,cliente);
+        var ficha=solicitud(lider,"GET","/api/crm/cuentas/"+cuenta,null,200).path("datos");
+        assertEquals(request.correo(),ficha.path("correo").asText());
+        clientesAnteriores.actualizar(cliente,new com.marketing.agencia.administrador.clientes.dto.ClienteRequest("Empresa anterior actualizada",request.correo(),request.telefono()));
+        assertEquals("Empresa anterior actualizada",solicitud(lider,"GET","/api/crm/cuentas/"+cuenta,null,200).path("datos").path("nombre").asText());
+        assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_cuenta where cliente_id=?",Integer.class,cliente));
+    }
+    @Test void contactoDeCampanaSeAsignaALaEmpresaYNoAdmiteCruce()throws Exception{
+        long c=contacto();long empresa=jdbc.queryForObject("select cuenta_id from public.crm_contacto where id=?",Long.class,c);
+        var ficha=solicitud(admin,"GET","/api/crm/cuentas/"+empresa,null,200).path("datos");
+        assertTrue(ficha.path("contactos").findValues("id").stream().anyMatch(x->x.asLong()==c));
+        assertTrue(ficha.path("campanas").findValues("id").stream().anyMatch(x->x.asLong()==campana));
+        long otra=solicitud(admin,"POST","/api/crm/cuentas",Map.of("nombre","Otra empresa","estado","ACTIVO"),201).path("datos").path("id").asLong();
+        solicitud(admin,"POST","/api/crm/contactos",Map.of("nombre","Cruce rechazado","correo",UUID.randomUUID()+"@example.test","estado","NUEVO","origen","WEB","cuentaId",otra,"campanaId",campana),400);
+        // La captura pública usa SQL directamente: el trigger también resuelve la empresa.
+        long captado=jdbc.queryForObject("insert into public.crm_contacto(nombre,correo,estado,origen,responsable_id,campana_id) values('Captación',?,'NUEVO','FORMULARIO',?,?) returning id",Long.class,UUID.randomUUID()+"@example.test",usuarioAdmin,campana);
+        assertEquals(empresa,jdbc.queryForObject("select cuenta_id from public.crm_contacto where id=?",Long.class,captado));
     }
     @Test void conectoresPublicitariosRetiradosNoRealizanLlamadasExternas()throws Exception{
         mvc.perform(post("/api/crm/operaciones/integraciones/1/sincronizar").header("Authorization","Bearer "+admin).param("desde","2026-01-01").param("hasta","2026-01-01")).andExpect(status().isNotFound());

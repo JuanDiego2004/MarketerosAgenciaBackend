@@ -96,3 +96,7 @@ La pantalla se encuentra en **Métricas → Rendimiento publicitario**, con **Fu
 
 
 WhatsApp conserva su webhook y sus credenciales. Configurar `CRM_WHATSAPP_VERSION` con la versión que usa el servicio; esta variable sustituye la versión compartida de Meta. No retirar los secretos de WhatsApp al limpiar variables antiguas de anuncios. Los gastos adicionales y los ingresos de oportunidades ganadas alimentan el retorno comercial; revisar `MarketingSystem/docs/MODELO_PRODUCTO_MARKETING.md`.
+
+## Unificación de empresas CRM v9
+
+Antes de publicar esta versión, aplicar las migraciones pendientes hasta `src/main/resources/sql/crm-v9.sql` con el auxiliar `scripts/PrepararCrm.java --aplicar`. La base configurada en este workspace ya tiene v9; si el servicio usa otra base, preparar allí los grupos pendientes. Se conserva la tabla cliente y se vincula automáticamente su perfil CRM; no se borran campañas, contactos ni adjuntos. Los registros anteriores se respaldan en crm_empresa_migracion. Actualizar backend y frontend para utilizar Clientes / Empresas (`/empresas`); el contrato `/api/crm/cuentas` sigue disponible. Difusión se separa en `/canales-difusion`; WhatsApp y los demás canales conservan `/integraciones`. Ver `MarketingSystem/docs/EMPRESAS_UNIFICADAS.md`.

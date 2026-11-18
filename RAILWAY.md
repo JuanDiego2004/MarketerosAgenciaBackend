@@ -27,3 +27,7 @@ Referencias oficiales: [Dockerfiles](https://docs.railway.com/guides/dockerfiles
 ## Rendimiento publicitario vigente
 
 La publicidad usa Mockaroo (`CRM_MOCKAROO_HABILITADO=true`, `CRM_MOCKAROO_API_KEY`). Aplicar migraciones hasta v8 antes de desplegar; no son automáticas. Los conectores Meta Ads, Google Ads y GA4 se retiraron, conservando históricos. WhatsApp Cloud permanece con sus credenciales y `CRM_WHATSAPP_VERSION`. Actualizar también el frontend, que utiliza `/api/crm/rendimiento`. La interfaz muestra inversión y retorno de oportunidades ganadas del CRM, separados de las conversiones de plataforma.
+
+## Unificación de empresas CRM v9
+
+Antes de publicar esta versión, aplicar las migraciones pendientes hasta `src/main/resources/sql/crm-v9.sql` con el auxiliar `scripts/PrepararCrm.java --aplicar`. La base configurada en este workspace ya tiene v9; si el servicio usa otra base, preparar allí los grupos pendientes. Se conserva la tabla cliente y se vincula automáticamente su perfil CRM; no se borran campañas, contactos ni adjuntos. Los registros anteriores se respaldan en crm_empresa_migracion. Actualizar backend y frontend para utilizar Clientes / Empresas (`/empresas`); el contrato `/api/crm/cuentas` sigue disponible. Difusión se separa en `/canales-difusion`; WhatsApp y los demás canales conservan `/integraciones`. Ver `MarketingSystem/docs/EMPRESAS_UNIFICADAS.md`.

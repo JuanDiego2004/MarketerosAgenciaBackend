@@ -25,7 +25,7 @@ public class CrmControlador {
     }
     @ExceptionHandler(org.springframework.jdbc.BadSqlGrammarException.class)
     public ResponseEntity<?> esquemaNoPreparado(org.springframework.jdbc.BadSqlGrammarException error) {
-        if ("42P01".equals(error.getSQLException().getSQLState()))
+        if (Set.of("42P01","42703").contains(error.getSQLException().getSQLState()))
             return ResponseEntity.status(503).body(ApiRespuesta.error("El CRM aún no está habilitado en la base de datos. Ejecuta la migración crm-v1.sql del backend", "CRM_MIGRACION_PENDIENTE"));
         throw error;
     }
@@ -53,6 +53,8 @@ public class CrmControlador {
     public Object editar(@PathVariable String recurso,@PathVariable long id,@RequestBody @Valid Registro datos,@AuthenticationPrincipal Jwt jwt) { return ApiRespuesta.exito("Registro actualizado",servicio.guardar(recurso,id,datos,sujeto(jwt))); }
     @DeleteMapping("/{recurso}/{id}")
     public ResponseEntity<?> eliminar(@PathVariable String recurso,@PathVariable long id,@AuthenticationPrincipal Jwt jwt) { servicio.eliminar(recurso,id,sujeto(jwt)); return ResponseEntity.noContent().build(); }
+    @PostMapping("/cuentas/{id}/archivar")
+    public Object archivarEmpresa(@PathVariable long id,@AuthenticationPrincipal Jwt jwt) { servicio.eliminar("cuentas",id,sujeto(jwt)); return ApiRespuesta.exito("Empresa archivada",null); }
     @PostMapping("/{recurso}/{id}/notas")
     public Object nota(@PathVariable String recurso,@PathVariable long id,@RequestBody @Valid Nota datos,@AuthenticationPrincipal Jwt jwt) { servicio.nota(recurso,id,datos.texto(),sujeto(jwt)); return ApiRespuesta.exito("Nota registrada",null); }
     @PostMapping("/contactos/{id}/consentimientos")
