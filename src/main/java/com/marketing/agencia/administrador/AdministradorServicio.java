@@ -21,6 +21,14 @@ public class AdministradorServicio {
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate consultas;
 
+    public void autorizarDashboard(UUID usuario) {
+        validarPermiso(usuario, "DASHBOARD_VER");
+    }
+
+    public void autorizarGeografia(UUID usuario, boolean resultado) {
+        validarPermiso(usuario, resultado ? "METRICA_REGISTRAR" : "CAMPANA_MODIFICAR");
+    }
+
     private static final Map<String, List<String>> ALIAS_PERMISOS = Map.ofEntries(
             Map.entry("DASHBOARD_VER", List.of("DASHBOARD_VER", "DASHBOARD_LEER", "DASHBOARD_CONSULTAR")),
             Map.entry("CAMPANA_CONSULTAR", List.of("CAMPANA_CONSULTAR", "CAMPANA_VER", "CAMPANA_LEER", "CAMPANAS_LEER")),

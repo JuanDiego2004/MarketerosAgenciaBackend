@@ -197,7 +197,16 @@ public class CrmOperacionServicio {
         var gastos=jdbc.queryForList("select campana_id,moneda,sum(importe) gasto from (select campana_id,moneda,importe,fecha from public.crm_gasto_meta union all select campana_id,moneda,importe,fecha from public.crm_gasto_google) g where fecha between ? and ? group by campana_id,moneda",desde,hasta);
         var embudo=jdbc.queryForList("select e.nombre,e.tipo,count(o.id) oportunidades from public.crm_etapa e left join public.crm_oportunidad o on o.etapa_id=e.id and (o.created_at at time zone 'America/Lima')::date between ? and ? group by e.id order by e.orden",desde,hasta);
         var rendimiento=jdbc.queryForList("select u.nombres responsable,o.moneda,count(*) oportunidades,sum(o.valor) valor,sum(case when e.tipo='GANADA' then o.valor else 0 end) ingresos from public.crm_oportunidad o join public.usuario u on u.id_usuario=o.responsable_id join public.crm_etapa e on e.id=o.etapa_id where (o.created_at at time zone 'America/Lima')::date between ? and ? group by u.id_usuario,u.nombres,o.moneda",desde,hasta);
-        return Map.of("campanas",leads,"ingresos",ingresos,"gastos",gastos,"embudo",embudo,"responsables",rendimiento,"conversiones",evolucion.conversiones(desde,hasta,sujeto),"modelo","Ingresos: "+modelo+" (interacciones hasta el cierre). Leads: primer origen por creación. Monedas separadas.");
+        var embudoCampanas=jdbc.queryForList("""
+            select coalesce((select x.campana_id from public.crm_origen x where x.contacto_id=c.id
+                order by x.created_at,x.id limit 1),c.campana_id) campana_id,
+              e.nombre,e.tipo,e.orden,count(o.id) oportunidades
+            from public.crm_oportunidad o join public.crm_contacto c on c.id=o.contacto_id
+              join public.crm_etapa e on e.id=o.etapa_id
+            where (o.created_at at time zone 'America/Lima')::date between ? and ?
+            group by 1,e.id order by e.orden
+            """,desde,hasta);
+        return Map.of("campanas",leads,"ingresos",ingresos,"gastos",gastos,"embudo",embudo,"embudoCampanas",embudoCampanas,"responsables",rendimiento,"conversiones",evolucion.conversiones(desde,hasta,sujeto),"modelo","Ingresos: "+modelo+" (interacciones hasta el cierre). Leads: primer origen por creación. Monedas separadas.");
     }
     void auditar(String r,long id,String accion,long autor){jdbc.update("insert into public.crm_auditoria(recurso,registro_id,accion,autor_id) values(?,?,?,?)",r,id,accion,autor);}
     static boolean vacio(Object o){return o==null||o.toString().isBlank();}

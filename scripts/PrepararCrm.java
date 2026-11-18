@@ -23,6 +23,18 @@ class PrepararCrm {
             }
             Set<String> existentes=new HashSet<>();try(ResultSet r=s.executeQuery("select table_name from information_schema.tables where table_schema='public' and table_name like 'crm_%'")){while(r.next())existentes.add(r.getString(1));}
             System.out.println("Tablas CRM existentes: "+new TreeSet<>(existentes));
+            if(List.of(args).contains("--dashboard")) {
+                if(List.of(args).contains("--aplicar")) {
+                    s.execute(Files.readString(Path.of("src/main/resources/sql/dashboard-v1.sql")));
+                    System.out.println("dashboard-v1 aplicada correctamente.");
+                } else {
+                    try(ResultSet r=s.executeQuery("select tablename from pg_tables where schemaname='public' and tablename like 'marketing_%' order by tablename")) {
+                        while(r.next())System.out.println("Geografía: "+r.getString(1));
+                    }
+                    System.out.println("Inventario Dashboard terminado. Usa --dashboard --aplicar para habilitar la geografía.");
+                }
+                return;
+            }
             if(!List.of(args).contains("--aplicar")){System.out.println("Inventario de solo lectura terminado.");return;}
             List<List<String>> grupos=List.of(List.of("crm_cuenta","crm_contacto","crm_consentimiento","crm_nota","crm_evento","crm_archivo","crm_auditoria"),List.of("crm_etapa","crm_oportunidad","crm_actividad","crm_segmento","crm_regla_score","crm_origen","crm_formulario","crm_meta","crm_contenido","crm_automatizacion","crm_ejecucion","crm_gasto_meta","crm_integracion_meta"),List.of("crm_etiqueta","crm_contacto_etiqueta","crm_transicion","crm_baja_email","crm_baja_token"),List.of("crm_campo","crm_campo_valor","crm_campos_revision","crm_flujo","crm_flujo_paso"),List.of("crm_conector","crm_gasto_google","crm_analitica","crm_baja_canal","crm_envio"),List.of("crm_whatsapp_mensaje","crm_whatsapp_estado"));
             for(int i=0;i<grupos.size();i++){
