@@ -162,6 +162,17 @@ class CrmEvolucionPostgresTests {
         long wa=flujoMensajeria(c,"WHATSAPP",plantilla);integraciones.ejecutar(wa,admin);assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,wa));
         when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenThrow(CrmOperacionServicio.invalido("Respuesta incierta de prueba"));long incierto=flujoMensajeria(c,"WHATSAPP",plantilla);integraciones.ejecutar(incierto,admin);integraciones.ejecutar(incierto,admin);assertEquals("INCIERTO",jdbc.queryForObject("select estado from public.crm_ejecucion where automatizacion_id=?",String.class,incierto));verify(http,times(2)).post(contains("graph.facebook"),anyMap(),any(),eq(false));
     }
+    @Test void helloWorldSeGuardaYEnviaSinParametrosConConsentimientoYUnaSolaVez()throws Exception{
+        long c=contacto();jdbc.update("update public.crm_contacto set telefono=? where id=?","51"+java.util.concurrent.ThreadLocalRandom.current().nextInt(100000000,999999999),c);
+        Map<String,Object> prueba=Map.of("plantilla","hello_world","idioma","en_US","parametros","");
+        long sinConsentimiento=flujoMensajeria(c,"WHATSAPP",prueba);integraciones.ejecutar(sinConsentimiento,admin);verifyNoInteractions(http);
+        jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING','WHATSAPP',now(),?)",c,usuarioAdmin);
+        when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenReturn(json.readTree("{\"messages\":[{\"id\":\"wamid.hello-world-solo-prueba\"}]}"));
+        long flujo=flujoMensajeria(c,"WHATSAPP",prueba);integraciones.ejecutar(flujo,admin);integraciones.ejecutar(flujo,admin);
+        verify(http,times(1)).post(contains("graph.facebook"),anyMap(),argThat(o->o instanceof Map<?,?> m&&m.get("template").equals(Map.of("name","hello_world","language",Map.of("code","en_US")))),eq(false));
+        assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,flujo));
+        assertEquals(0,jdbc.queryForObject("select count(*) from public.crm_baja_token where contacto_id=?",Integer.class,c));
+    }
     private long flujoMensajeria(long c,String canal,Map<String,Object>parametros){
         String origen="msg-"+UUID.randomUUID();jdbc.update("update public.crm_contacto set origen=? where id=?",origen,c);long s=((Number)operaciones.guardar("segmentos",null,Map.of("nombre","Mensajería prueba","origen",origen),admin).get("id")).longValue();
         long f=((Number)operaciones.guardar("automatizaciones",null,Map.of("nombre","Mensaje prueba","segmento_id",s,"accion","CREAR_TAREA","asunto","Base","activa",true),admin).get("id")).longValue();flujos.guardar(f,new CrmFlujosServicio.Edicion("Mensaje prueba",s,true,0,new CrmFlujosServicio.Definicion("entrada",List.of(new CrmFlujosServicio.Nodo("entrada","SEGMENTO","Entrada",Map.of(),"mensaje",null,null),new CrmFlujosServicio.Nodo("mensaje",canal,"Comunicación",parametros,null,null,null)))),admin);return f;
