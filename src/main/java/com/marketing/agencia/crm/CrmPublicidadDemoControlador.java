@@ -9,7 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.*;
 
-@RestController @RequiredArgsConstructor @RequestMapping("/api/crm/publicidad-demo")
+// Ruta neutra para evitar falsos positivos de filtros de anuncios. Se conserva el alias anterior.
+@RestController @RequiredArgsConstructor @RequestMapping({"/api/crm/demostracion","/api/crm/publicidad-demo"})
 public class CrmPublicidadDemoControlador {
     private final CrmPublicidadDemoServicio servicio;
     @GetMapping("/estado") public Object estado(@AuthenticationPrincipal Jwt j){return ok(servicio.estado(sujeto(j)));}

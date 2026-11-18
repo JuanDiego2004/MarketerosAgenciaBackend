@@ -44,11 +44,13 @@ class CrmPublicidadDemoPostgresTests {
         LocalDate d=LocalDate.now().minusDays(1);assertNotNull(servicio.metricas(id,d,d,"",lider));
     }
     @Test void httpDevuelveIdYDatosSinRequerirCuentaPublicitaria()throws Exception{
-        mvc.perform(get("/api/crm/publicidad-demo")).andExpect(status().isUnauthorized());
-        var r=mvc.perform(post("/api/crm/publicidad-demo").header("Authorization","Bearer "+admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("campana_id",campana,"plataforma","TIKTOK","moneda","USD")))).andExpect(status().isCreated()).andReturn();
+        mvc.perform(get("/api/crm/demostracion")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/crm/publicidad-demo/estado").header("Authorization","Bearer "+admin)).andExpect(status().isOk());
+        mvc.perform(get("/api/crm/demostracion/estado").header("Authorization","Bearer "+admin)).andExpect(status().isOk());
+        var r=mvc.perform(post("/api/crm/demostracion").header("Authorization","Bearer "+admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("campana_id",campana,"plataforma","TIKTOK","moneda","USD")))).andExpect(status().isCreated()).andReturn();
         long id=json.readTree(r.getResponse().getContentAsByteArray()).path("datos").path("id").asLong();LocalDate d=LocalDate.now().minusDays(1);
-        mvc.perform(post("/api/crm/publicidad-demo/"+id+"/sincronizar").header("Authorization","Bearer "+analista).param("desde",d.toString()).param("hasta",d.toString())).andExpect(status().isForbidden());
-        mvc.perform(get("/api/crm/publicidad-demo/"+id+"/metricas").header("Authorization","Bearer "+analista).param("desde",d.toString()).param("hasta",d.toString())).andExpect(status().isOk());
+        mvc.perform(post("/api/crm/demostracion/"+id+"/sincronizar").header("Authorization","Bearer "+analista).param("desde",d.toString()).param("hasta",d.toString())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/crm/demostracion/"+id+"/metricas").header("Authorization","Bearer "+analista).param("desde",d.toString()).param("hasta",d.toString())).andExpect(status().isOk());
     }
     @Test void sincronizarReutilizaDiasYNoContaminaGastoReal(){
         long id=demo();LocalDate d=LocalDate.now().minusDays(2);long antes=jdbc.queryForObject("select count(*) from public.crm_gasto_meta",Long.class);
