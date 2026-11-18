@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
 import java.nio.file.InvalidPathException;
@@ -92,6 +93,13 @@ public class ManejadorErroresApi {
                         "La ruta solicitada contiene caracteres inválidos",
                         "RUTA_INVALIDA"
                 ));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiRespuesta<Void>> manejarRecursoNoEncontrado(
+            NoResourceFoundException excepcion) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiRespuesta.error("La ruta solicitada no existe", "RUTA_NO_ENCONTRADA"));
     }
 
     @ExceptionHandler(Exception.class)

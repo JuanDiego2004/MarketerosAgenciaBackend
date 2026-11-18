@@ -15,7 +15,7 @@ public class CrmMensajeriaServicio {
     private final JdbcTemplate jdbc;private final CrmProveedorHttp http;private final CrmBajasServicio bajas;
     @Value("${crm.whatsapp.token:}") private String whatsappToken;
     @Value("${crm.whatsapp.phone-id:}") private String phoneId;
-    @Value("${crm.meta.version:v27.0}") private String version;
+    @Value("${crm.whatsapp.version:v27.0}") private String version;
     @Value("${crm.twilio.account-sid:}") private String sid;
     @Value("${crm.twilio.auth-token:}") private String twilioToken;
     @Value("${crm.twilio.from:}") private String desde;

@@ -16,10 +16,14 @@ Las migraciones CRM son manuales y no se ejecutan en cada arranque. Railway debe
 
 ## Variables mínimas
 
-DB_URL (JDBC PostgreSQL), DB_USERNAME, DB_PASSWORD, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_CORS_ALLOWED_ORIGINS. Los valores SMTP y tokens publicitarios se toman de Variables, no se hornean en Docker.
+DB_URL (JDBC PostgreSQL), DB_USERNAME, DB_PASSWORD, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_CORS_ALLOWED_ORIGINS. Los valores SMTP, credenciales de WhatsApp y clave Mockaroo se toman de Variables, no se hornean en Docker.
 
 ## Reversión
 
 Deshabilitar automatizaciones y envíos antes de revertir a una versión anterior que no conozca las supresiones. Revertir el deployment desde Railway sin borrar tablas. La base debe conservar las migraciones aditivas y los datos.
 
 Referencias oficiales: [Dockerfiles](https://docs.railway.com/guides/dockerfiles), [Spring Boot](https://railway.com/guides/spring-boot). El despliegue real requiere acceso al proyecto/servicio del usuario; crear estos archivos no significa que ya esté publicado.
+
+## Rendimiento publicitario vigente
+
+La publicidad usa Mockaroo (`CRM_MOCKAROO_HABILITADO=true`, `CRM_MOCKAROO_API_KEY`). Aplicar migraciones hasta v8 antes de desplegar; no son automáticas. Los conectores Meta Ads, Google Ads y GA4 se retiraron, conservando históricos. WhatsApp Cloud permanece con sus credenciales y `CRM_WHATSAPP_VERSION`. Actualizar también el frontend, que utiliza `/api/crm/rendimiento`. La interfaz muestra inversión y retorno de oportunidades ganadas del CRM, separados de las conversiones de plataforma.

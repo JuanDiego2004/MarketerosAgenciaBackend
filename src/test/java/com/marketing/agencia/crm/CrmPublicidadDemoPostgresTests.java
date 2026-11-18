@@ -66,4 +66,24 @@ class CrmPublicidadDemoPostgresTests {
         when(http.post(startsWith("https://api.mockaroo.com/"),anyMap(),any(),eq(false))).thenReturn(CrmMockarooTests.respuesta(8));assertThrows(ExcepcionApi.class,()->servicio.sincronizar(id,d.plusDays(1),d.plusDays(1),admin));
         assertEquals(9,jdbc.queryForObject("select count(*) from public.crm_publicidad_demo_metrica where demo_id=?",Integer.class,id));assertNotNull(jdbc.queryForObject("select ultimo_error from public.crm_publicidad_demo where id=?",String.class,id));
     }
+    @Test void retornoUsaVentasGanadasGastosAdicionalesYNoDuplicaPautaHistorica(){
+        long id=demo();LocalDate d=LocalDate.now(java.time.ZoneId.of("America/Lima"));servicio.sincronizar(id,d,d,admin);
+        jdbc.update("insert into public.crm_gasto_meta(campana_id,fecha,moneda,importe,impresiones,clicks,cuenta_externa,campana_externa) values(?,?,'PEN',100,1000,10,'historica','historica')",campana,d);
+        long contacto=jdbc.queryForObject("insert into public.crm_contacto(nombre,correo,estado,origen,campana_id,responsable_id) values(?,?,'NUEVO','WEB',?,?) returning id",Long.class,"Retorno rollback",UUID.randomUUID()+"@example.test",campana,autor);
+        long etapa=jdbc.queryForObject("select id from public.crm_etapa where tipo='GANADA' order by orden limit 1",Long.class);
+        var operaciones=new CrmOperacionServicio(jdbc,new CrmAcceso(jdbc),new CrmEvolucionServicio(jdbc,new CrmAcceso(jdbc)));
+        operaciones.guardar("pipeline",null,Map.of("nombre","Venta registrada","contacto_id",contacto,"etapa_id",etapa,"responsable_id",autor,"valor","1200.00","moneda","PEN","probabilidad",100,"fecha_cierre",d.toString()),admin);
+        var gasto=new HashMap<String,Object>(Map.of("campana_id",campana,"fecha",d.toString(),"moneda","PEN","concepto","Producción","importe","50.00","idempotencia",UUID.randomUUID().toString()));
+        long inversion=((Number)servicio.inversion(gasto,admin).get("id")).longValue();assertEquals(inversion,servicio.inversion(gasto,admin).get("id"));
+        assertThrows(ExcepcionApi.class,()->servicio.inversion(gasto,analista));
+        gasto.put("importe","60.00");assertThrows(ExcepcionApi.class,()->servicio.inversion(gasto,admin));
+        var r=servicio.metricas(id,d,d,"PE",admin);var negocio=(Map<?,?>)r.get("negocio");
+        assertEquals(0,new java.math.BigDecimal("320.00").compareTo((java.math.BigDecimal)negocio.get("inversion")));
+        assertEquals(0,new java.math.BigDecimal("1200.00").compareTo((java.math.BigDecimal)negocio.get("ingresos")));
+        assertEquals(0,new java.math.BigDecimal("275.00").compareTo((java.math.BigDecimal)negocio.get("roi")));
+        assertEquals(0,new java.math.BigDecimal("30.00").compareTo((java.math.BigDecimal)((Map<?,?>)r.get("resumen")).get("inversion")));
+        servicio.anularInversion(inversion,0,admin);assertThrows(ExcepcionApi.class,()->servicio.anularInversion(inversion,0,admin));
+        negocio=(Map<?,?>)servicio.metricas(id,d,d,"",admin).get("negocio");assertEquals(0,new java.math.BigDecimal("270.00").compareTo((java.math.BigDecimal)negocio.get("inversion")));
+        assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_inversion where id=? and anulado",Integer.class,inversion));
+    }
 }
