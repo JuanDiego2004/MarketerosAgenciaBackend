@@ -1,9 +1,14 @@
-.git
-.env
-.env.*
-target
-.idea
-.vscode
-*.log
-scripts
-HELP.md
+# Contexto mínimo: solo archivos necesarios para compilar el backend.
+**
+!Dockerfile
+!.dockerignore
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/**
+!src/
+!src/main/
+!src/main/**
+# Mantener fuera secretos locales incluso si aparecen dentro de recursos.
+**/.env
+**/.env.*

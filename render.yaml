@@ -1,0 +1,29 @@
+# Para un repositorio cuya raíz es backend_agencia.
+# El plan gratuito es para pruebas: no ejecuta SMTP por 25/465/587 y suspende por inactividad.
+services:
+  - type: web
+    name: marketing-crm-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: CRM_AUTOMATIZACIONES_HABILITADAS
+        value: "false"
+      - key: CRM_SMTP_ONE_CLICK
+        value: "false"
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false

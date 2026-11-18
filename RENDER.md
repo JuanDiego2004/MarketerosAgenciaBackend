@@ -1,0 +1,88 @@
+# Backend en Render con Docker y Java 25
+
+El Dockerfile compila el JAR con JDK 25 y lo ejecuta con JRE 25 y usuario sin privilegios. La imagen no contiene `.env`, Git, archivos del IDE, pruebas o salidas de compilaciones anteriores. No se ejecutan pruebas contra la base durante el build.
+
+Spring Boot ya escucha en `0.0.0.0` y toma el puerto de `PORT`. Render usa 10000 por defecto. El endpoint público `/actuator/health` comprueba la base de datos y no muestra detalles internos. El Dockerfile también puede seguir utilizándose en Railway, cuyo `PORT` sobrescribe el valor de la imagen.
+
+## Despliegue desde el panel
+
+1. Subir los archivos del backend a tu repositorio Git, incluyendo `Dockerfile`, `.dockerignore`, `.mvn`, `mvnw`, `pom.xml` y `src/main`. No subir `.env`.
+2. En Render elegir **New → Web Service** y conectar el repositorio y la rama que corresponden.
+3. Configurar:
+
+   | Campo | Valor |
+   | --- | --- |
+   | Language / Runtime | Docker |
+   | Root Directory | Vacío si el repositorio contiene directamente este backend; `backend_agencia` solo si realmente es una subcarpeta de un monorepo |
+   | Dockerfile Path | `./Dockerfile`, relativo a la raíz elegida |
+   | Docker Build Context | `.` |
+   | Docker Command | Vacío: se usa el ENTRYPOINT de la imagen |
+   | Health Check Path | `/actuator/health` |
+
+   No añadir comandos Maven o `java -jar` en los campos de un runtime nativo; Docker ya contiene la compilación y el arranque.
+4. Elegir el plan conscientemente. El Blueprint incluido usa **Free** para que no seleccione un plan de pago implícitamente. Sus límites se explican más abajo.
+5. En **Environment**, añadir los valores reales de las variables de `.env.example`. Las credenciales se introducen en Render, sin pegarlas en el chat o en archivos versionados.
+6. Desplegar y comprobar que `/actuator/health` devuelve HTTP 200 con `status: UP`, y que `/swagger-ui/index.html` carga. Una API CRM sin sesión debe devolver 401.
+
+## Variables
+
+| Variable | Valor esperado |
+| --- | --- |
+| `DB_URL` | URL JDBC de la base PostgreSQL existente, por ejemplo `jdbc:postgresql://HOST:6543/postgres?sslmode=require` |
+| `DB_USERNAME` | Usuario de esa base; en el pooler de Supabase suele incluir la referencia del proyecto |
+| `DB_PASSWORD` | Contraseña de la base |
+| `SUPABASE_URL` | URL del mismo proyecto de autenticación que utiliza el frontend |
+| `SUPABASE_PUBLISHABLE_KEY` | Clave pública/publicable del proyecto que requiere el backend; no usar la contraseña de la base |
+| `APP_CORS_ALLOWED_ORIGINS` | Orígenes exactos del frontend separados por comas, por ejemplo `http://localhost:5173,https://TU_FRONTEND` sin rutas ni barra final |
+| `PORT` | Render lo define; el Blueprint utiliza 10000 |
+| `CRM_PUBLIC_URL` | Dominio HTTPS real del nuevo servicio de Render, sin `/api` al final |
+| `CRM_AUTOMATIZACIONES_HABILITADAS` | Mantener `false` durante configuración y pruebas |
+| `CRM_SMTP_ONE_CLICK` | Mantener `false` salvo que el proveedor firme las cabeceras de baja con DKIM |
+
+Después de conocer el dominio del servicio, establecer `CRM_PUBLIC_URL` con esa dirección y volver a desplegar/aplicar las variables. Actualizar cualquier valor anterior que apuntara a Railway o localhost.
+
+Las variables de Meta, Google, WhatsApp, Twilio y SMTP son opcionales para arrancar, pero necesarias para sus respectivos conectores. Copiar únicamente las que se vayan a utilizar desde `.env.crm.example`. No se incluyen en la imagen ni en el Blueprint. Los estados «configurado» no prueban la validez de la cuenta del proveedor.
+
+La base de datos debe tener aplicadas las migraciones correspondientes. No se ejecutan automáticamente al arrancar ni al construir la imagen. La base configurada en esta sesión ya tiene CRM v1–v6; si Render utiliza otra base, inventariarla y aplicar las migraciones antes de arrancar. No ejecutar todos los scripts de nuevo sobre tablas existentes.
+
+## Blueprint opcional
+
+`render.yaml` permite crear el servicio desde **New → Blueprint**. Está preparado para un repositorio cuya raíz es el backend. Los valores `sync: false` se solicitan en Render durante la creación inicial; las integraciones opcionales se añaden después desde Environment.
+
+Si el backend está dentro de un monorepo, adaptar `dockerfilePath` y `dockerContext` a la ubicación real desde la raíz del repositorio, o usar el despliegue manual anterior. No copiar `render.yaml` a la raíz de un repositorio diferente sin revisar esas rutas.
+
+## WhatsApp y frontend
+
+Una vez que el servicio esté operativo:
+
+- Añadir `CRM_WHATSAPP_APP_SECRET`, `CRM_WHATSAPP_VERIFY_TOKEN`, `CRM_WHATSAPP_PHONE_ID` y `CRM_WHATSAPP_TOKEN` con los valores de la misma app y número configurados en Meta.
+- Configurar la URL de devolución de Meta con el dominio real del servicio seguido de `/api/webhooks/whatsapp`.
+- Usar el mismo valor de `CRM_WHATSAPP_VERIFY_TOKEN` en Meta, verificar y suscribir `messages`. Guía completa: `MarketingSystem/docs/WHATSAPP_WEBHOOK.md`.
+- Cambiar `VITE_API_URL` en el frontend al dominio HTTPS del backend, sin `/api`, y reiniciar el frontend o recompilarlo si ya está publicado. Incluir el origen de ese frontend en `APP_CORS_ALLOWED_ORIGINS`.
+
+## Límites del plan Free
+
+Render suspende los servicios gratuitos después de 15 minutos sin tráfico entrante. El arranque en frío puede retrasar la recepción del webhook; las tareas programadas no se ejecutan mientras el servicio está suspendido.
+
+Además, los servicios gratuitos bloquean conexiones salientes a los puertos **25, 465 y 587**. El SMTP configurado por este backend usa normalmente 587, así que no funcionará desde ese plan. Para mantener este conector SMTP y el proceso siempre activo se necesita un plan que permita esas conexiones y ejecución continua. La elección/contratación del plan queda a cargo del usuario; no se ha creado ningún servicio ni contratado un plan.
+
+## Prueba Docker local
+
+Con Docker Desktop instalado y el motor Linux iniciado, desde la raíz del backend:
+
+```powershell
+docker build -t marketing-crm-backend:local .
+docker run --rm --name marketing-crm-backend -p 8080:10000 --env-file .env -e PORT=10000 -e CRM_AUTOMATIZACIONES_HABILITADAS=false marketing-crm-backend:local
+```
+
+El puerto local 8080 debe estar libre. Comprobar después `http://localhost:8080/actuator/health` y `http://localhost:8080/swagger-ui/index.html`. Para probar la recepción pública del webhook se necesita el dominio HTTPS de Render o un túnel HTTPS de desarrollo; localhost no es accesible desde Meta.
+
+## Reversión
+
+Desactivar automatizaciones y la suscripción del webhook antes de volver a un backend que no soporte el nuevo contrato. Mantener la base y sus tablas; revertir el despliegue desde Render no implica borrar datos.
+
+## Referencias
+
+Verificación local: `mvnw -DskipTests package` completado con Java 25; `render.yaml` analizado correctamente con SnakeYAML; cambios sin errores de espacios en `git diff --check`. No se ejecutó `docker build` porque este entorno no tiene Docker/Podman disponibles. No se desplegó ni creó ningún servicio en Render.
+
+[Docker en Render](https://render.com/docs/docker), [puerto y dirección de escucha](https://render.com/docs/web-services#port-binding), [comprobaciones de salud](https://render.com/docs/health-checks), [Blueprint](https://render.com/docs/blueprint-spec), [límites del plan gratuito](https://render.com/docs/free).
