@@ -78,7 +78,10 @@ class CrmEvolucionPostgresTests {
         mvc.perform(post("/api/webhooks/whatsapp").contentType(MediaType.APPLICATION_JSON).header("X-Hub-Signature-256",firmaWhatsApp(cuerpo)).content(new String(cuerpo,java.nio.charset.StandardCharsets.UTF_8)+" ")).andExpect(status().isForbidden());
         recibirWhatsApp(cuerpo);
         mvc.perform(post("/api/webhooks/whatsapp").contentType(MediaType.APPLICATION_JSON).content(new byte[CrmWhatsAppControlador.MAX_CUERPO+1])).andExpect(status().isPayloadTooLarge());
-        org.springframework.test.util.ReflectionTestUtils.setField(whatsapp,"appSecret","");try{mvc.perform(post("/api/webhooks/whatsapp").contentType(MediaType.APPLICATION_JSON).header("X-Hub-Signature-256",firmaWhatsApp(cuerpo)).content(cuerpo)).andExpect(status().isServiceUnavailable());}finally{org.springframework.test.util.ReflectionTestUtils.setField(whatsapp,"appSecret",APP_SECRET_PRUEBA);}
+        org.springframework.test.util.ReflectionTestUtils.setField(whatsapp,"appSecret","");try{
+            mvc.perform(get("/api/webhooks/whatsapp").param("hub.mode","subscribe").param("hub.verify_token",VERIFY_PRUEBA).param("hub.challenge","456")).andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("456"));
+            mvc.perform(post("/api/webhooks/whatsapp").contentType(MediaType.APPLICATION_JSON).header("X-Hub-Signature-256",firmaWhatsApp(cuerpo)).content(cuerpo)).andExpect(status().isServiceUnavailable()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(org.hamcrest.Matchers.containsString("CRM_WHATSAPP_APP_SECRET")));
+        }finally{org.springframework.test.util.ReflectionTestUtils.setField(whatsapp,"appSecret",APP_SECRET_PRUEBA);}
     }
     @Test void mensajesEntrantesDeduplicadosAsociacionPermisosYConsentimiento()throws Exception{
         long c=contacto();String telefono="51"+java.util.concurrent.ThreadLocalRandom.current().nextInt(100000000,999999999);jdbc.update("update public.crm_contacto set telefono=? where id=?",telefono,c);String id="wamid.test."+UUID.randomUUID(),bsuid="US."+UUID.randomUUID(),segundo="wamid.test."+UUID.randomUUID();String ahora=Long.toString(Instant.now().getEpochSecond());

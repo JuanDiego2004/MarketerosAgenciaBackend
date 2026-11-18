@@ -32,11 +32,20 @@ public class CrmWhatsAppServicio {
     record Mensaje(String proveedor_id,String remitente,String telefono,String tipo,String texto,boolean truncado,String fecha){}
     record Entrega(String proveedor_id,String estado,String fecha,String codigo_error){}
 
-    boolean configurado(){return phoneId.matches("[0-9]{1,30}")&&!appSecret.isBlank()&&verifyToken.length()>=32&&verifyToken.length()<=256;}
-    private void exigirConfiguracion(){if(!configurado())throw new ExcepcionApi(HttpStatus.SERVICE_UNAVAILABLE,"WHATSAPP_CONFIGURACION","Configura el webhook de WhatsApp en el backend");}
+    private boolean verificacionConfigurada(){return !verifyToken.isBlank()&&verifyToken.length()>=32&&verifyToken.length()<=256;}
+    boolean configurado(){return phoneId.matches("[0-9]{1,30}")&&!appSecret.isBlank()&&verificacionConfigurada();}
+    private void exigirVerificacion(){if(!verificacionConfigurada())throw new ExcepcionApi(HttpStatus.SERVICE_UNAVAILABLE,"WHATSAPP_CONFIGURACION","Configura CRM_WHATSAPP_VERIFY_TOKEN en las variables del servicio de Render: debe tener entre 32 y 256 caracteres. El .env local no configura Render.");}
+    private void exigirConfiguracion(){
+        List<String>pendientes=new ArrayList<>();
+        if(!phoneId.matches("[0-9]{1,30}"))pendientes.add("CRM_WHATSAPP_PHONE_ID (identificador numérico de Meta)");
+        if(appSecret.isBlank())pendientes.add("CRM_WHATSAPP_APP_SECRET (secreto de la app)");
+        if(!verificacionConfigurada())pendientes.add("CRM_WHATSAPP_VERIFY_TOKEN (32 a 256 caracteres)");
+        if(!pendientes.isEmpty())throw new ExcepcionApi(HttpStatus.SERVICE_UNAVAILABLE,"WHATSAPP_CONFIGURACION","Configura en el entorno del backend: "+String.join(", ",pendientes)+". No se muestran los valores de las credenciales.");
+    }
     public String verificar(String modo,String token,String desafio){
-        exigirConfiguracion();
-        if(!"subscribe".equals(modo)||token==null||token.length()>256||!MessageDigest.isEqual(verifyToken.getBytes(StandardCharsets.UTF_8),token.getBytes(StandardCharsets.UTF_8)))throw firmaInvalida();
+        exigirVerificacion();
+        if(!"subscribe".equals(modo)||token==null)throw invalido("Esta URL la verifica Meta enviando hub.mode, hub.verify_token y hub.challenge. Abrirla sola en el navegador no comprueba la suscripción.");
+        if(token.length()>256||!MessageDigest.isEqual(verifyToken.getBytes(StandardCharsets.UTF_8),token.getBytes(StandardCharsets.UTF_8)))throw new ExcepcionApi(HttpStatus.FORBIDDEN,"WHATSAPP_VERIFICACION","El token recibido no coincide con CRM_WHATSAPP_VERIFY_TOKEN del backend desplegado. Revisa que Meta y Render tengan exactamente el mismo valor.");
         if(desafio==null||desafio.isBlank()||desafio.length()>512)throw invalido("Desafío de verificación inválido");return desafio;
     }
     void validarFirma(byte[]cuerpo,String firma){
