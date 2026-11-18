@@ -38,7 +38,6 @@ class CrmEvolucionPostgresTests {
     @Autowired CrmBajasServicio bajas;
     @Autowired CrmCamposServicio campos;
     @Autowired CrmFlujosServicio flujos;
-    @Autowired CrmGoogleServicio google;
     @Autowired CrmMensajeriaServicio mensajeria;
     @Autowired CrmWhatsAppServicio whatsapp;
     @MockitoBean CrmProveedorHttp http;
@@ -132,20 +131,11 @@ class CrmEvolucionPostgresTests {
         pieza.put("version",0);pieza.put("estado","EN_REVISION");solicitud(analista,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,200);
         pieza.put("version",1);pieza.put("estado","APROBADO");solicitud(analista,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,403);solicitud(lider,"PUT","/api/crm/operaciones/contenido/"+contenido,pieza,200);
     }
-    @Test void googleMetricasSinDuplicadosPermisosYErrorConservaHistorico()throws Exception{
-        campana=nuevaCampana();LocalDate dia=LocalDate.now(ZoneOffset.UTC).minusDays(1);
-        when(http.post(anyString(),anyMap(),any(),anyBoolean())).thenAnswer(inv->{String url=inv.getArgument(0);if(url.contains("oauth2"))return json.readTree("{\"access_token\":\"fake-only-test\",\"expires_in\":3600}");if(url.contains("googleads"))return json.readTree("[{\"results\":[{\"campaign\":{\"id\":\"22\"},\"customer\":{\"currencyCode\":\"PEN\"},\"segments\":{\"date\":\""+dia+"\"},\"metrics\":{\"costMicros\":\"12345678\",\"impressions\":\"100\",\"clicks\":\"4\"}}]}]");return json.readTree("{\"rowCount\":1,\"rows\":[{\"dimensionValues\":[{\"value\":\""+dia.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)+"\"}],\"metricValues\":[{\"value\":\"5\"},{\"value\":\"6\"},{\"value\":\"1.5\"}]}]}");});
-        long ads=solicitud(admin,"POST","/api/crm/operaciones/conectores",Map.of("fuente","GOOGLE_ADS","cuenta_externa","123","campana_externa","22","campana_id",campana),201).path("datos").path("id").asLong();
-        solicitud(lider,"GET","/api/crm/operaciones/conectores",null,403);solicitud(analista,"POST","/api/crm/operaciones/conectores/"+ads+"/sincronizar?desde="+dia+"&hasta="+dia,null,403);
-        assertTrue((Boolean)google.estado(admin).get("googleAdsConfigurado"));
-        google.sincronizar(ads,dia,dia,admin);google.sincronizar(ads,dia,dia,admin);
-        verify(http,times(2)).post(contains("googleads"),argThat(h->h.containsKey("Authorization")&&!h.containsKey("developer-token")),any(),eq(false));
-        assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_gasto_google where conector_id=?",Integer.class,ads));
-        assertEquals(0,new BigDecimal("12.345678").compareTo(jdbc.queryForObject("select importe from public.crm_gasto_google where conector_id=?",BigDecimal.class,ads)));
-        @SuppressWarnings("unchecked") var gastos=(List<Map<String,Object>>)operaciones.atribucion(dia,dia,"PRIMERO",admin).get("gastos");assertEquals(0,new BigDecimal("12.345678").compareTo(new BigDecimal(gastos.stream().filter(f->Objects.equals(f.get("campana_id"),campana)).findFirst().orElseThrow().get("gasto").toString())));
-        long ga=((Number)google.crear(Map.of("fuente","GA4","cuenta_externa","321","campana_externa","newsletter","campana_id",campana),admin).get("id")).longValue();google.sincronizar(ga,dia,dia,admin);google.sincronizar(ga,dia,dia,admin);assertEquals(1,google.metricas(ga,dia,dia,admin).size());assertEquals(6L,google.metricas(ga,dia,dia,admin).getFirst().get("sesiones"));
-        when(http.post(contains("googleads"),anyMap(),any(),anyBoolean())).thenThrow(CrmOperacionServicio.invalido("Proveedor rechazó operación"));assertThrows(com.marketing.agencia.config.ExcepcionApi.class,()->google.sincronizar(ads,dia,dia,admin));assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_gasto_google where conector_id=?",Integer.class,ads));
-        google.activar(ads,0,false,admin);assertThrows(com.marketing.agencia.config.ExcepcionApi.class,()->google.sincronizar(ads,dia,dia,admin));solicitud(admin,"PUT","/api/crm/operaciones/conectores/"+ads,Map.of("version",0,"activo",true),409);
+    @Test void conectoresPublicitariosRetiradosNoRealizanLlamadasExternas()throws Exception{
+        mvc.perform(post("/api/crm/operaciones/integraciones/1/sincronizar").header("Authorization","Bearer "+admin).param("desde","2026-01-01").param("hasta","2026-01-01")).andExpect(status().isNotFound());
+        // El patrón genérico PUT /{recurso}/{id} coincide con la URL, pero no existe un GET de conectores.
+        mvc.perform(get("/api/crm/operaciones/conectores/estado").header("Authorization","Bearer "+admin)).andExpect(status().isMethodNotAllowed());
+        verifyNoInteractions(http);
     }
     @Test void mensajeriaConsentimientoBajaPorCanalYResultadoInciertoNoReintenta()throws Exception{
         long c=contacto();jdbc.update("update public.crm_contacto set telefono='51987654321' where id=?",c);for(String canal:List.of("SMS","WHATSAPP"))jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING',?,now(),?)",c,canal,usuarioAdmin);
@@ -161,6 +151,17 @@ class CrmEvolucionPostgresTests {
         when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenReturn(json.readTree("{\"messages\":[{\"id\":\"wamid.test\"}]}"));
         long wa=flujoMensajeria(c,"WHATSAPP",plantilla);integraciones.ejecutar(wa,admin);assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,wa));
         when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenThrow(CrmOperacionServicio.invalido("Respuesta incierta de prueba"));long incierto=flujoMensajeria(c,"WHATSAPP",plantilla);integraciones.ejecutar(incierto,admin);integraciones.ejecutar(incierto,admin);assertEquals("INCIERTO",jdbc.queryForObject("select estado from public.crm_ejecucion where automatizacion_id=?",String.class,incierto));verify(http,times(2)).post(contains("graph.facebook"),anyMap(),any(),eq(false));
+    }
+    @Test void helloWorldSeGuardaYEnviaSinParametrosConConsentimientoYUnaSolaVez()throws Exception{
+        long c=contacto();jdbc.update("update public.crm_contacto set telefono=? where id=?","51"+java.util.concurrent.ThreadLocalRandom.current().nextInt(100000000,999999999),c);
+        Map<String,Object> prueba=Map.of("plantilla","hello_world","idioma","en_US","parametros","");
+        long sinConsentimiento=flujoMensajeria(c,"WHATSAPP",prueba);integraciones.ejecutar(sinConsentimiento,admin);verifyNoInteractions(http);
+        jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING','WHATSAPP',now(),?)",c,usuarioAdmin);
+        when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenReturn(json.readTree("{\"messages\":[{\"id\":\"wamid.hello-world-solo-prueba\"}]}"));
+        long flujo=flujoMensajeria(c,"WHATSAPP",prueba);integraciones.ejecutar(flujo,admin);integraciones.ejecutar(flujo,admin);
+        verify(http,times(1)).post(contains("graph.facebook"),anyMap(),argThat(o->o instanceof Map<?,?> m&&m.get("template").equals(Map.of("name","hello_world","language",Map.of("code","en_US")))),eq(false));
+        assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,flujo));
+        assertEquals(0,jdbc.queryForObject("select count(*) from public.crm_baja_token where contacto_id=?",Integer.class,c));
     }
     private long flujoMensajeria(long c,String canal,Map<String,Object>parametros){
         String origen="msg-"+UUID.randomUUID();jdbc.update("update public.crm_contacto set origen=? where id=?",origen,c);long s=((Number)operaciones.guardar("segmentos",null,Map.of("nombre","Mensajería prueba","origen",origen),admin).get("id")).longValue();

@@ -66,7 +66,7 @@ public class CrmOperacionServicio {
     }
     @Transactional
     public Map<String,Object> guardar(String r,Long id,Map<String,Object> datos,UUID sujeto) {
-        long autor=acceso.exigir(sujeto,r,true);String tabla=tabla(r);
+        long autor=acceso.exigir(sujeto,r,true);if(r.equals("integraciones"))throw new ExcepcionApi(HttpStatus.GONE,"CONECTOR_RETIRADO","Gestiona las campañas desde Rendimiento publicitario");String tabla=tabla(r);
         Map<String,Object> anterior=id==null?Map.of():existente(r,id);
         if(r.equals("automatizaciones")&&id!=null&&jdbc.queryForObject("select exists(select 1 from public.crm_flujo where automatizacion_id=?)",Boolean.class,id))throw invalido("Este flujo usa el editor visual; edítalo desde su ficha visual");
         boolean propio=analista(autor);
@@ -74,12 +74,6 @@ public class CrmOperacionServicio {
         LinkedHashMap<String,Object> d=validar(r,datos,autor);
         if(r.equals("automatizaciones")&&id==null)d.put("autor_id",autor);
         if(r.equals("etapas")&&id!=null&&!Objects.equals(anterior.get("tipo"),d.get("tipo"))&&jdbc.queryForObject("select count(*) from public.crm_oportunidad where etapa_id=?",Long.class,id)>0)throw invalido("No se puede cambiar el tipo de una etapa con oportunidades. Crea otra etapa.");
-        if(r.equals("integraciones")) {
-            jdbc.queryForList("select pg_advisory_xact_lock(hashtext(?))","meta:"+d.get("campana_externa"));
-            if(jdbc.queryForObject("select count(*) from public.crm_integracion_meta where campana_externa=? and id<>?",Long.class,d.get("campana_externa"),id==null?-1:id)>0)throw invalido("La campaña Meta ya tiene un vínculo interno");
-            if(jdbc.queryForObject("select count(*) from public.crm_gasto_meta where campana_externa=? and campana_id<>?",Long.class,d.get("campana_externa"),d.get("campana_id"))>0)throw invalido("Esta campaña Meta tiene gasto histórico vinculado a otra campaña interna");
-            if(id!=null&&(!Objects.equals(anterior.get("campana_externa"),d.get("campana_externa"))||!Objects.equals(anterior.get("campana_id"),d.get("campana_id")))&&jdbc.queryForObject("select count(*) from public.crm_gasto_meta where campana_externa=?",Long.class,anterior.get("campana_externa"))>0)throw invalido("No se cambia un vínculo con gasto sincronizado; conserva su trazabilidad");
-        }
         if(propio&&Set.of("actividades","contenido").contains(r)&&numero(d,"responsable_id")!=autor)throw prohibido();
         if(r.equals("contenido")) {
             String previo=Objects.toString(anterior.get("estado"),"BORRADOR");String nuevo=d.get("estado").toString();
@@ -158,7 +152,6 @@ public class CrmOperacionServicio {
                 m.put("asunto",texto(d,"asunto",160,true));m.put("mensaje",texto(d,"mensaje",10000,false));m.put("activa",Boolean.TRUE.equals(d.get("activa")));
                 if("EMAIL".equals(m.get("accion"))&&vacio(m.get("mensaje")))throw invalido("El email necesita un mensaje");
             }
-            case "integraciones" -> {m.put("campana_id",campana(d));String externo=texto(d,"campana_externa",120,true);if(!externo.matches("[0-9]+"))throw invalido("El ID de campaña Meta debe ser numérico");m.put("campana_externa",externo);}
             default -> throw invalido("Recurso inválido");
         }
         return m;
@@ -194,7 +187,7 @@ public class CrmOperacionServicio {
         var leads=jdbc.queryForList(origen+"select ca.id_campana,ca.nombre,count(c.id) leads from public.campana ca left join origen c on c.campana_id=ca.id_campana and (c.created_at at time zone 'America/Lima')::date between ? and ? group by ca.id_campana,ca.nombre order by ca.nombre",desde,hasta);
         var ingresos=evolucion.ingresos(desde,hasta,modelo);
         leads.add(Map.of("id_campana",0,"nombre","Sin campaña","leads",jdbc.queryForObject(origen+"select count(*) from origen where campana_id is null and (created_at at time zone 'America/Lima')::date between ? and ?",Long.class,desde,hasta)));
-        var gastos=jdbc.queryForList("select campana_id,moneda,sum(importe) gasto from (select campana_id,moneda,importe,fecha from public.crm_gasto_meta union all select campana_id,moneda,importe,fecha from public.crm_gasto_google) g where fecha between ? and ? group by campana_id,moneda",desde,hasta);
+        var gastos=gastosCampanas(desde,hasta);
         var embudo=jdbc.queryForList("select e.nombre,e.tipo,count(o.id) oportunidades from public.crm_etapa e left join public.crm_oportunidad o on o.etapa_id=e.id and (o.created_at at time zone 'America/Lima')::date between ? and ? group by e.id order by e.orden",desde,hasta);
         var rendimiento=jdbc.queryForList("select u.nombres responsable,o.moneda,count(*) oportunidades,sum(o.valor) valor,sum(case when e.tipo='GANADA' then o.valor else 0 end) ingresos from public.crm_oportunidad o join public.usuario u on u.id_usuario=o.responsable_id join public.crm_etapa e on e.id=o.etapa_id where (o.created_at at time zone 'America/Lima')::date between ? and ? group by u.id_usuario,u.nombres,o.moneda",desde,hasta);
         var embudoCampanas=jdbc.queryForList("""
@@ -209,6 +202,23 @@ public class CrmOperacionServicio {
         return Map.of("campanas",leads,"ingresos",ingresos,"gastos",gastos,"embudo",embudo,"embudoCampanas",embudoCampanas,"responsables",rendimiento,"conversiones",evolucion.conversiones(desde,hasta,sujeto),"modelo","Ingresos: "+modelo+" (interacciones hasta el cierre). Leads: primer origen por creación. Monedas separadas.");
     }
     void auditar(String r,long id,String accion,long autor){jdbc.update("insert into public.crm_auditoria(recurso,registro_id,accion,autor_id) values(?,?,?,?)",r,id,accion,autor);}
+    List<Map<String,Object>> gastosCampanas(LocalDate desde,LocalDate hasta){
+        return jdbc.queryForList("""
+            with importado as (
+              select d.campana_id,d.moneda,m.fecha,sum(m.inversion) importe
+              from public.crm_publicidad_demo_metrica m join public.crm_publicidad_demo d on d.id=m.demo_id
+              where m.fecha between ? and ? group by d.campana_id,d.moneda,m.fecha
+            ), historico as (
+              select campana_id,moneda,fecha,importe from public.crm_gasto_meta
+              union all select campana_id,moneda,fecha,importe from public.crm_gasto_google
+            ), gastos as (
+              select * from importado
+              union all select h.campana_id,h.moneda,h.fecha,h.importe from historico h
+              where h.fecha between ? and ? and not exists(select 1 from importado i where i.campana_id=h.campana_id and i.moneda=h.moneda and i.fecha=h.fecha)
+              union all select campana_id,moneda,fecha,importe from public.crm_inversion where not anulado and fecha between ? and ?
+            ) select campana_id,moneda,sum(importe) gasto from gastos group by campana_id,moneda
+            """,desde,hasta,desde,hasta,desde,hasta);
+    }
     static boolean vacio(Object o){return o==null||o.toString().isBlank();}
     static long numero(Map<String,Object>d,String k){try{return new BigDecimal(Objects.toString(d.get(k),"")).longValueExact();}catch(Exception e){throw invalido("Número inválido: "+k);}}
     static int entero(Map<String,Object>d,String k,int min,int max){long v=numero(d,k);if(v<min||v>max)throw invalido("Fuera de rango: "+k);return (int)v;}

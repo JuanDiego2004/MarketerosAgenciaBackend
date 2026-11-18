@@ -41,9 +41,9 @@ Spring Boot ya escucha en `0.0.0.0` y toma el puerto de `PORT`. Render usa 10000
 
 Después de conocer el dominio del servicio, establecer `CRM_PUBLIC_URL` con esa dirección y volver a desplegar/aplicar las variables. Actualizar cualquier valor anterior que apuntara a Railway o localhost.
 
-Las variables de Meta, Google, WhatsApp, Twilio y SMTP son opcionales para arrancar, pero necesarias para sus respectivos conectores. Copiar únicamente las que se vayan a utilizar desde `.env.crm.example`. No se incluyen en la imagen ni en el Blueprint. Los estados «configurado» no prueban la validez de la cuenta del proveedor.
+Las variables de Mockaroo, WhatsApp, Twilio y SMTP son opcionales para arrancar, pero necesarias para sus respectivas funciones. Los conectores de publicidad Meta, Google Ads y GA4 se retiraron; no requieren credenciales en esta versión. Copiar únicamente las que se vayan a utilizar desde `.env.crm.example`. No se incluyen en la imagen ni en el Blueprint. Los estados «configurado» no prueban la validez de la cuenta del proveedor.
 
-La base de datos debe tener aplicadas las migraciones correspondientes. No se ejecutan automáticamente al arrancar ni al construir la imagen. La base configurada en esta sesión ya tiene CRM v1–v6; si Render utiliza otra base, inventariarla y aplicar las migraciones antes de arrancar. No ejecutar todos los scripts de nuevo sobre tablas existentes.
+La base de datos debe tener aplicadas las migraciones correspondientes. No se ejecutan automáticamente al arrancar ni al construir la imagen. La base configurada en esta sesión ya tiene CRM v1–v8; si Render utiliza otra base, inventariarla y aplicar las migraciones antes de arrancar. No ejecutar todos los scripts de nuevo sobre tablas existentes.
 
 ## Blueprint opcional
 
@@ -86,3 +86,13 @@ Desactivar automatizaciones y la suscripción del webhook antes de volver a un b
 Verificación local: `mvnw -DskipTests package` completado con Java 25; `render.yaml` analizado correctamente con SnakeYAML; cambios sin errores de espacios en `git diff --check`. No se ejecutó `docker build` porque este entorno no tiene Docker/Podman disponibles. No se desplegó ni creó ningún servicio en Render.
 
 [Docker en Render](https://render.com/docs/docker), [puerto y dirección de escucha](https://render.com/docs/web-services#port-binding), [comprobaciones de salud](https://render.com/docs/health-checks), [Blueprint](https://render.com/docs/blueprint-spec), [límites del plan gratuito](https://render.com/docs/free).
+# Rendimiento publicitario con Mockaroo
+
+En **Environment**, configurar `CRM_MOCKAROO_HABILITADO=true` y `CRM_MOCKAROO_API_KEY` con la clave privada de Mockaroo. La clave permanece en el backend. El `.env` local no configura Render.
+
+Desplegar el backend y el frontend actualizados. Aplicar `src/main/resources/sql/crm-v7.sql` y `crm-v8.sql` después de las migraciones anteriores, o el auxiliar `scripts/PrepararCrm.java --aplicar`. Docker no aplica migraciones al arrancar. Las migraciones añaden estadísticas e inversiones con RLS y conservan todos los datos anteriores.
+
+La pantalla se encuentra en **Métricas → Rendimiento publicitario**, con **Fuente: Mockaroo**. Hasta 90 días y 9 países por campaña: 810 filas por descarga, con reutilización de días guardados. No se requiere publicar anuncios ni conectar Meta/TikTok/YouTube para este flujo. Eliminar las variables o establecer `CRM_MOCKAROO_HABILITADO=false` conserva el histórico y bloquea nuevas descargas.
+
+
+WhatsApp conserva su webhook y sus credenciales. Configurar `CRM_WHATSAPP_VERSION` con la versión que usa el servicio; esta variable sustituye la versión compartida de Meta. No retirar los secretos de WhatsApp al limpiar variables antiguas de anuncios. Los gastos adicionales y los ingresos de oportunidades ganadas alimentan el retorno comercial; revisar `MarketingSystem/docs/MODELO_PRODUCTO_MARKETING.md`.
