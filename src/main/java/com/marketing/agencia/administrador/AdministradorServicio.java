@@ -194,6 +194,13 @@ public class AdministradorServicio {
     }
 
     private Map<String, Object> guardarCampana(Long id, Map<String, Object> d, UUID solicitante) {
+        if(id!=null && Boolean.TRUE.equals(jdbc.queryForObject("select to_regclass('public.crm_acuerdo_campana') is not null",Boolean.class))) {
+            var contratos=jdbc.queryForList("select a.servicio,e.cliente_id from public.crm_acuerdo_campana v join public.crm_acuerdo a on a.id=v.contrato_id join public.crm_cuenta e on e.id=a.empresa_id where v.campana_id=?",id);
+            if(!contratos.isEmpty()) {
+                if("ANALISIS".equals(contratos.getFirst().get("servicio")))throw invalido("Una campaña de solo análisis no admite cambios de publicidad");
+                if(((Number)contratos.getFirst().get("cliente_id")).longValue()!=numero(d,"idCliente"))throw invalido("La empresa de una campaña vinculada debe coincidir con su contrato");
+            }
+        }
         long creador = idUsuario(solicitante);
         String nombre = texto(d, "nombre");
         long cliente = numero(d, "idCliente");

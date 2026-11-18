@@ -71,6 +71,7 @@ public class CrmPublicidadDemoServicio {
     }
     @Transactional public Map<String,Object> inversion(Map<String,Object>d,UUID u){
         long autor=acceso.exigir(u,"integraciones",true),campana=numero(d,"campana_id");String moneda=opcion(d,"moneda","PEN","USD"),concepto=texto(d,"concepto",200,true);BigDecimal importe=decimal(d,"importe");LocalDate fecha;UUID clave;
+        if(Boolean.TRUE.equals(jdbc.queryForObject("select to_regclass('public.crm_acuerdo_campana') is not null",Boolean.class))&&jdbc.queryForObject("select count(*) from public.crm_acuerdo_campana v join public.crm_acuerdo a on a.id=v.contrato_id where v.campana_id=? and a.servicio='ANALISIS'",Integer.class,campana)>0)throw invalido("Solo análisis permite consultar inversión; no gestionar gastos publicitarios");
         try{fecha=LocalDate.parse(Objects.toString(d.get("fecha"),""));clave=UUID.fromString(Objects.toString(d.get("idempotencia"),""));}catch(Exception e){throw invalido("Revisa la fecha y vuelve a abrir el formulario");}
         if(importe.signum()<=0||importe.compareTo(new BigDecimal("999999999"))>0||fecha.isAfter(LocalDate.now(ZoneId.of("America/Lima"))))throw invalido("Indica un importe positivo y una fecha sin anticipación");
         if(jdbc.queryForObject("select count(*) from public.campana where id_campana=?",Long.class,campana)==0)throw invalido("Campaña inexistente");
