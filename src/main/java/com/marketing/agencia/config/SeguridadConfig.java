@@ -3,6 +3,7 @@ package com.marketing.agencia.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -18,10 +19,32 @@ import java.util.List;
 
 @Configuration
 public class SeguridadConfig {
+    @Bean @Order(0)
+    public SecurityFilterChain webhookWhatsApp(HttpSecurity http) throws Exception {
+        return http.securityMatcher("/api/webhooks/whatsapp").csrf(c->c.disable())
+                .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/webhooks/whatsapp").permitAll().requestMatchers(HttpMethod.POST,"/api/webhooks/whatsapp").permitAll().anyRequest().denyAll()).build();
+    }
+    @Bean @Order(2)
+    public SecurityFilterChain bajasPublicas(HttpSecurity http) throws Exception {
+        return http.securityMatcher("/api/bajas/**").csrf(c->c.disable())
+                .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(h->h.contentSecurityPolicy(c->c.policyDirectives("default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")))
+                .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.GET,"/api/bajas/*").permitAll().requestMatchers(HttpMethod.POST,"/api/bajas/*").permitAll().anyRequest().denyAll()).build();
+    }
+    // Solo el formulario público puede embeberse; el resto conserva las cabeceras de seguridad.
+    @Bean @Order(1)
+    public SecurityFilterChain captacionPublica(HttpSecurity http) throws Exception {
+        return http.securityMatcher("/api/captacion/**")
+                .csrf(c -> c.disable())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(h -> h.frameOptions(f -> f.disable()).contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors *; base-uri 'none'")))
+                .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET,"/api/captacion/*").permitAll().requestMatchers(HttpMethod.POST,"/api/captacion/*","/api/captacion/*/webhook").permitAll().anyRequest().denyAll()).build();
+    }
 
     @Bean
     public CorsConfigurationSource configuracionCORS(
-            @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+            @Value("${app.cors.allowed-origins:${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}}")
             List<String> origenesPermitidos) {
 
         CorsConfiguration configuracion = new CorsConfiguration();
@@ -105,6 +128,7 @@ public class SeguridadConfig {
                         ).permitAll()
 
                         // Swagger y documentación, si están instalados
+                        .requestMatchers(HttpMethod.GET,"/actuator/health").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

@@ -1,6 +1,6 @@
 package com.marketing.agencia.administrador;
 
-import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
+import com.marketing.agencia.auth.dto.response.ApiRespuesta;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;

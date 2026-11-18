@@ -1,10 +1,10 @@
-package com.marketing.agencia.Auth.servicios;
+package com.marketing.agencia.auth.servicios;
 
-import com.marketing.agencia.Auth.dto.response.SesionRespuesta;
-import com.marketing.agencia.Auth.dto.response.RespuestaAuthSupabase;
-import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
-import com.marketing.agencia.Auth.mapper.AuthMapper;
-import com.marketing.agencia.Auth.mapper.MapeoRespuestaUsuario;
+import com.marketing.agencia.auth.dto.response.SesionRespuesta;
+import com.marketing.agencia.auth.dto.response.RespuestaAuthSupabase;
+import com.marketing.agencia.auth.dto.response.UsuarioRespuesta;
+import com.marketing.agencia.auth.mapper.AuthMapper;
+import com.marketing.agencia.auth.mapper.MapeoRespuestaUsuario;
 import com.marketing.agencia.Usuario.dto.Requests.LoginRequest;
 import com.marketing.agencia.Usuario.dto.Requests.RegistroRequest;
 import com.marketing.agencia.Usuario.entidad.Permiso;

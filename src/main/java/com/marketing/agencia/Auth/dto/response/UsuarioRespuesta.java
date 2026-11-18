@@ -1,4 +1,4 @@
-package com.marketing.agencia.Auth.dto.response;
+package com.marketing.agencia.auth.dto.response;
 
 public record UsuarioRespuesta(
         Long idUsuario,

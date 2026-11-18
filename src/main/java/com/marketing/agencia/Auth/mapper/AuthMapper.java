@@ -1,4 +1,4 @@
-package com.marketing.agencia.Auth.mapper;
+package com.marketing.agencia.auth.mapper;
 
 import com.marketing.agencia.Usuario.dto.Requests.RegistroRequest;
 import com.marketing.agencia.Usuario.entidad.Usuario;

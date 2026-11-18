@@ -1,10 +1,10 @@
 package com.marketing.agencia.Usuario.servicio;
 
-import com.marketing.agencia.Auth.dto.response.RespuestaAuthSupabase;
-import com.marketing.agencia.Auth.dto.response.UsuarioCreadoRespuesta;
-import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
-import com.marketing.agencia.Auth.mapper.MapeoRespuestaUsuario;
-import com.marketing.agencia.Auth.servicios.SupabaseAuthServicio;
+import com.marketing.agencia.auth.dto.response.RespuestaAuthSupabase;
+import com.marketing.agencia.auth.dto.response.UsuarioCreadoRespuesta;
+import com.marketing.agencia.auth.dto.response.UsuarioRespuesta;
+import com.marketing.agencia.auth.mapper.MapeoRespuestaUsuario;
+import com.marketing.agencia.auth.servicios.SupabaseAuthServicio;
 import com.marketing.agencia.Usuario.dto.Requests.CrearUsuarioRequest;
 import com.marketing.agencia.Usuario.dto.Requests.EditarUsuarioRequest;
 import com.marketing.agencia.Usuario.entidad.Rol;

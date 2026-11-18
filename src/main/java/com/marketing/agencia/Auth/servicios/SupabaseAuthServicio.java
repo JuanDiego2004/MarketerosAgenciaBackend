@@ -1,6 +1,6 @@
-package com.marketing.agencia.Auth.servicios;
+package com.marketing.agencia.auth.servicios;
 
-import com.marketing.agencia.Auth.dto.response.RespuestaAuthSupabase;
+import com.marketing.agencia.auth.dto.response.RespuestaAuthSupabase;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;

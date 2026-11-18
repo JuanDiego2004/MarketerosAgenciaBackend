@@ -1,9 +1,9 @@
 
 package com.marketing.agencia.Usuario.controlador;
 
-import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
-import com.marketing.agencia.Auth.dto.response.UsuarioCreadoRespuesta;
-import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
+import com.marketing.agencia.auth.dto.response.ApiRespuesta;
+import com.marketing.agencia.auth.dto.response.UsuarioCreadoRespuesta;
+import com.marketing.agencia.auth.dto.response.UsuarioRespuesta;
 import com.marketing.agencia.Usuario.dto.Requests.CrearUsuarioRequest;
 import com.marketing.agencia.Usuario.dto.Requests.EditarUsuarioRequest;
 import com.marketing.agencia.Usuario.servicio.UsuarioServicio;

@@ -1,6 +1,6 @@
 package com.marketing.agencia.config;
 
-import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
+import com.marketing.agencia.auth.dto.response.ApiRespuesta;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;

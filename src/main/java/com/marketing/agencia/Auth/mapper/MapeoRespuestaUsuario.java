@@ -1,7 +1,7 @@
-package com.marketing.agencia.Auth.mapper;
+package com.marketing.agencia.auth.mapper;
 
-import com.marketing.agencia.Auth.dto.response.UsuarioCreadoRespuesta;
-import com.marketing.agencia.Auth.dto.response.UsuarioRespuesta;
+import com.marketing.agencia.auth.dto.response.UsuarioCreadoRespuesta;
+import com.marketing.agencia.auth.dto.response.UsuarioRespuesta;
 import com.marketing.agencia.Usuario.entidad.Usuario;
 import org.springframework.stereotype.Component;
 

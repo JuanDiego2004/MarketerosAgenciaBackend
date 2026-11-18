@@ -1,8 +1,8 @@
-package com.marketing.agencia.Auth.controladores;
+package com.marketing.agencia.auth.controladores;
 
-import com.marketing.agencia.Auth.dto.response.ApiRespuesta;
-import com.marketing.agencia.Auth.dto.response.SesionRespuesta;
-import com.marketing.agencia.Auth.servicios.AuthServicio;
+import com.marketing.agencia.auth.dto.response.ApiRespuesta;
+import com.marketing.agencia.auth.dto.response.SesionRespuesta;
+import com.marketing.agencia.auth.servicios.AuthServicio;
 import com.marketing.agencia.Usuario.dto.Requests.LoginRequest;
 import com.marketing.agencia.Usuario.dto.Requests.RegistroRequest;
 import lombok.RequiredArgsConstructor;
