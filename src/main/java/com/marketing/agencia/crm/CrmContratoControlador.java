@@ -13,6 +13,7 @@ import java.util.*;
 @RestController @RequestMapping("/api/crm/contratacion") @RequiredArgsConstructor
 public class CrmContratoControlador {
  private final CrmContratoServicio s;
+ private final CrmEstadisticasIniciales estadisticas;
  @PostMapping("/contratos/{id}/ampliaciones") public Object ampliar(@PathVariable long id,@AuthenticationPrincipal Jwt j)throws Exception{return ApiRespuesta.exito("Borrador contextual preparado",s.prepararAmpliacion(id,u(j)));}
  @PostMapping("/contratos/{id}/anuncios/{ad}/mockaroo") public Object mockaroo(@PathVariable long id,@PathVariable long ad,@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j){return ApiRespuesta.exito("Datos simulados asociados",s.sincronizar(id,ad,d,u(j)));}
  @PostMapping("/contratos/{id}/contenido/{contenido}") public Object contenido(@PathVariable long id,@PathVariable long contenido,@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j){s.contenido(id,contenido,d,u(j));return ApiRespuesta.exito("Estado del contenido actualizado",null);}
@@ -21,7 +22,12 @@ public class CrmContratoControlador {
  @GetMapping("/borradores/{id}") public Object alta(@PathVariable UUID id,@AuthenticationPrincipal Jwt j){return ApiRespuesta.exito("Borrador",s.detalleAlta(id,u(j)));}
  @PutMapping("/borradores/{id}") public Object guardar(@PathVariable UUID id,@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j)throws Exception{return ApiRespuesta.exito("Borrador guardado",s.guardarAlta(id,d,u(j)));}
  @PostMapping("/borradores/{id}/archivos/{clave}") public Object subir(@PathVariable UUID id,@PathVariable UUID clave,@RequestParam MultipartFile archivo,@AuthenticationPrincipal Jwt j)throws Exception{return ApiRespuesta.exito("Archivo vinculado al borrador",s.subir(id,clave,archivo,u(j)));}
- @PostMapping("/borradores/{id}/confirmar") public Object confirmar(@PathVariable UUID id,@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j)throws Exception{return ApiRespuesta.exito("Contrato creado",s.confirmar(id,CrmOperacionServicio.entero(d,"version",0,Integer.MAX_VALUE),u(j)));}
+ @PostMapping("/borradores/{id}/confirmar") public Object confirmar(@PathVariable UUID id,@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j)throws Exception{
+  var resultado=new LinkedHashMap<>(s.confirmar(id,CrmOperacionServicio.entero(d,"version",0,Integer.MAX_VALUE),u(j)));
+  resultado.put("estadisticasIniciales",estadisticas.preparar(((Number)resultado.get("id")).longValue(),u(j)));
+  return ApiRespuesta.exito("Contrato creado",resultado);
+ }
+ @PostMapping("/contratos/{id}/estadisticas-iniciales") public Object estadisticas(@PathVariable long id,@AuthenticationPrincipal Jwt j){return ApiRespuesta.exito("Carga inicial de estadísticas",estadisticas.preparar(id,u(j)));}
  @GetMapping("/referencias") public Object buscar(@RequestParam long empresa,@RequestParam String plataforma,@RequestParam String referencia,@AuthenticationPrincipal Jwt j){return ApiRespuesta.exito("Referencias locales",s.buscar(empresa,plataforma,referencia,u(j)));}
  @GetMapping("/contratos/{id}") public Object detalle(@PathVariable long id,@AuthenticationPrincipal Jwt j){return ApiRespuesta.exito("Ficha del contrato",s.detalle(id,u(j)));}
  @GetMapping("/archivos/{id}") public ResponseEntity<?> archivo(@PathVariable UUID id,@AuthenticationPrincipal Jwt j){var f=s.archivo(id,u(j));return ResponseEntity.ok().contentType(MediaType.parseMediaType(f.get("mime").toString())).cacheControl(CacheControl.noStore()).body(new ByteArrayResource((byte[])f.get("contenido")));}

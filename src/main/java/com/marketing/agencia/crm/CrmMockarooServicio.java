@@ -34,6 +34,20 @@ public class CrmMockarooServicio {
     }
     static List<Map<String,Object>> campos(){return List.of(Map.of("name","n","type","Row Number"),numero("impresiones",1000,10000),numero("ctr_base",100,600),numero("conversion_base",100,1000),numero("costo_centavos",15,250),numero("ticket_centavos",2000,25000));}
     private static Map<String,Object> numero(String nombre,int min,int max){return Map.of("name",nombre,"type","Number","min",min,"max",max,"decimals",0);}
+    /** Agrupa anuncios sin enviar sus identificadores; cada descarga contiene como máximo 990 filas. */
+    public Map<Long,List<Fila>> generarAnuncios(Map<Long,List<LocalDate>> solicitud){
+        if(!configurado())throw new ExcepcionApi(HttpStatus.SERVICE_UNAVAILABLE,"MOCKAROO_CONFIGURACION","Configura Mockaroo en el entorno del backend");
+        record DiaAnuncio(long anuncio,LocalDate fecha){}
+        List<DiaAnuncio> plan=new ArrayList<>();Map<Long,List<Fila>> resultado=new LinkedHashMap<>();
+        solicitud.forEach((id,dias)->{if(dias.isEmpty()||dias.size()>90||new HashSet<>(dias).size()!=dias.size())throw invalido("Solicita entre 1 y 90 días distintos por anuncio");resultado.put(id,new ArrayList<>());dias.forEach(d->plan.add(new DiaAnuncio(id,d)));});
+        for(int inicio=0;inicio<plan.size();inicio+=110){
+            var lote=plan.subList(inicio,Math.min(inicio+110,plan.size()));
+            var respuesta=http.post("https://api.mockaroo.com/api/generate.json?count="+lote.size()*PAISES.size()+"&array=true",Map.of("X-API-Key",apiKey,"User-Agent","MarketingSystem/1.0"),campos(),false);
+            var filas=interpretar(respuesta,lote.stream().map(DiaAnuncio::fecha).toList());
+            for(int i=0;i<filas.size();i++){int dia=(respuesta.get(i).path("n").asInt()-1)/PAISES.size();resultado.get(lote.get(dia).anuncio()).add(filas.get(i));}
+        }
+        return resultado;
+    }
     static List<Fila> interpretar(JsonNode respuesta,List<LocalDate>dias){
         int cantidad=dias.size()*PAISES.size();
         if(respuesta==null||!respuesta.isArray()||respuesta.size()!=cantidad)throw invalido("Mockaroo devolvió un conjunto incompleto. No se guardaron resultados parciales");

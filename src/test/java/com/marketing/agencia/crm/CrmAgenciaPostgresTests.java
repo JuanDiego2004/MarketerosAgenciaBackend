@@ -22,6 +22,7 @@ class CrmAgenciaPostgresTests {
  @Autowired JdbcTemplate jdbc; @Autowired CrmAgenciaServicio agencia; @Autowired CrmOperacionServicio operaciones;
  @Autowired CrmEntregaServicio entregas; @Autowired CrmAlcanceServicio alcance;
  @Autowired CrmContratoServicio contratacion;
+ @Autowired CrmEstadisticasIniciales iniciales;
  @Autowired org.springframework.test.web.servlet.MockMvc mvc;
  @MockitoBean JwtDecoder jwt; @MockitoBean CrmMockarooServicio mockaroo;
  UUID admin,analista;long autor,empresa,campana,cuenta;
@@ -40,7 +41,40 @@ class CrmAgenciaPostgresTests {
  Map<String,Object> datosAnuncio(long contrato){return new LinkedHashMap<>(Map.of("nombre","Video campaña","contrato_id",contrato,"cuenta_id",cuenta,"campana_id",campana,"codigo","AD-"+UUID.randomUUID(),"formato","VIDEO","fecha",LocalDate.now().toString()));}
  Map<String,Object> altaBase(String servicio){var d=datosContrato(servicio);d.put("objetivo","Servicio contextual");d.put("modalidad","ORGANICA");d.put("presupuesto",0);d.put("produccion",0);d.put("analisis_desde",LocalDate.now().minusDays(1).toString());d.put("analisis_hasta",LocalDate.now().toString());d.put("prestaciones",List.of(Map.of("prestacion","PUBLICACION","cantidad",2),Map.of("prestacion","ANALISIS","cantidad",2),Map.of("prestacion","INFORMES","cantidad",1)));return d;}
  Map<String,Object> planCanal(String plataforma){return Map.of("plataforma",plataforma,"objetivo","Reconocimiento","programado_en",OffsetDateTime.now().minusHours(1).toString(),"responsable_id",autor,"modalidad","ORGANICA","presupuesto",0);}
+ void datosInicialesMockaroo(){
+  doAnswer(inv->{
+   Map<Long,List<LocalDate>> solicitud=inv.getArgument(0);Map<Long,List<CrmMockarooServicio.Fila>> datos=new LinkedHashMap<>();
+   solicitud.forEach((ad,dias)->{List<CrmMockarooServicio.Fila> filas=new ArrayList<>();for(var dia:dias)for(var pais:CrmMockarooServicio.PAISES)filas.add(new CrmMockarooServicio.Fila(dia,pais.codigo(),2000,60,3,new BigDecimal("30.00"),new BigDecimal("60.00")));datos.put(ad,filas);});return datos;
+  }).when(mockaroo).generarAnuncios(anyMap());
+ }
+ UUID borradorDifusionInicial()throws Exception{
+  var d=altaBase("DIFUSION");d.put("prestaciones",List.of(Map.of("prestacion","PUBLICACION","cantidad",1)));d.put("piezas",List.of(Map.of("titulo","Anuncio inicial","descripcion","Texto del cliente","formato","TEXTO","fuente","CLIENTE","canales",List.of(planCanal("FACEBOOK")))));
+  UUID alta=UUID.randomUUID();contratacion.guardarAlta(alta,Map.of("datos",d,"version",0),admin);return alta;
+ }
+ @Test void confirmarPorApiCargaEstadisticasAntesDeResponderSinPublicarNiDuplicar()throws Exception{
+  datosInicialesMockaroo();UUID alta=borradorDifusionInicial();
+  String respuesta=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/crm/contratacion/borradores/"+alta+"/confirmar").header("Authorization","Bearer "+admin).contentType("application/json").content("{\"version\":1}")).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.datos.estadisticasIniciales.estado").value("LISTO")).andReturn().getResponse().getContentAsString();
+  long contrato=new com.fasterxml.jackson.databind.ObjectMapper().readTree(respuesta).path("datos").path("id").asLong();
+  long anuncio=jdbc.queryForObject("select id from crm_anuncio where contrato_id=?",Long.class,contrato);
+  assertEquals(63,jdbc.queryForObject("select count(*) from crm_anuncio_metrica where anuncio_id=?",Integer.class,anuncio));
+  assertEquals(0,new BigDecimal(jdbc.queryForObject("select sum(inversion)::text from crm_anuncio_metrica where anuncio_id=?",String.class,anuncio)).signum());
+  assertEquals("BORRADOR",jdbc.queryForObject("select estado from crm_acuerdo where id=?",String.class,contrato));assertEquals("BORRADOR",jdbc.queryForObject("select estado from crm_anuncio where id=?",String.class,anuncio));
+  var estadisticas=agencia.metricas(anuncio,LocalDate.now().minusDays(6),LocalDate.now(),admin);assertTrue(((BigDecimal)((Map<?,?>)estadisticas.get("resumen")).get("impresiones")).signum()>0);
+  mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/crm/contratacion/borradores/"+alta+"/confirmar").header("Authorization","Bearer "+admin).contentType("application/json").content("{\"version\":1}")).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+  verify(mockaroo,times(1)).generarAnuncios(anyMap());
+ }
+ @Test void falloDeMockarooConservaContratoYPermiteReintentarSinPrestacionAnalisis()throws Exception{
+  UUID alta=borradorDifusionInicial();when(mockaroo.generarAnuncios(anyMap())).thenThrow(new IllegalStateException("Fallo del proveedor"));
+  mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/crm/contratacion/borradores/"+alta+"/confirmar").header("Authorization","Bearer "+admin).contentType("application/json").content("{\"version\":1}")).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.datos.estadisticasIniciales.estado").value("ERROR"));
+  long contrato=jdbc.queryForObject("select contrato_id from crm_alta_contrato where id=?",Long.class,alta);assertTrue(contrato>0);
+  long anuncio=jdbc.queryForObject("select id from crm_anuncio where contrato_id=?",Long.class,contrato);
+  assertEquals(0,jdbc.queryForObject("select count(*) from crm_anuncio_metrica where anuncio_id=?",Integer.class,anuncio));
+  datosInicialesMockaroo();mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/crm/contratacion/contratos/"+contrato+"/estadisticas-iniciales").header("Authorization","Bearer "+admin)).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.datos.estado").value("LISTO"));
+  assertEquals(63,jdbc.queryForObject("select count(*) from crm_anuncio_metrica where anuncio_id=?",Integer.class,anuncio));
+  assertThrows(ExcepcionApi.class,()->iniciales.preparar(contrato,analista));
+ }
  @Test void asistenteVinculaAudienciaExistenteYGuardaSuNombreCanonico()throws Exception{
+  // Las otras pruebas de contratación conservan su flujo manual de persistencia.
   long audiencia=jdbc.queryForObject("insert into segmento_audiencia(nombre,estado,ubicacion_geografica,id_usuario_creador) values('Jóvenes de Lima','ACTIVO','Lima, Perú',?) returning id_segmento",Long.class,autor);
   var opciones=agencia.opciones(admin);assertTrue(((List<Map<String,Object>>)opciones.get("audiencias")).stream().anyMatch(a->((Number)a.get("idSegmento")).longValue()==audiencia));
   var d=altaBase("DIFUSION");d.put("modalidad","PAGADA");d.put("presupuesto",500);

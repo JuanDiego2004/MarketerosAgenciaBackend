@@ -12,6 +12,23 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class CrmMockarooTests {
+    @Test void agrupaAnunciosSinMezclarFilasDesordenadasYSinEnviarIds(){
+        var http=mock(CrmProveedorHttp.class);var servicio=new CrmMockarooServicio(http);
+        ReflectionTestUtils.setField(servicio,"habilitado",true);ReflectionTestUtils.setField(servicio,"apiKey","clave-prueba");
+        var filas=respuesta(18);for(int i=9;i<18;i++)((com.fasterxml.jackson.databind.node.ObjectNode)filas.get(i)).put("impresiones",4000);
+        ArrayNode invertida=new ObjectMapper().createArrayNode();for(int i=17;i>=0;i--)invertida.add(filas.get(i));
+        when(http.post(anyString(),anyMap(),any(),eq(false))).thenReturn(invertida);
+        LocalDate fecha=LocalDate.of(2026,1,1);Map<Long,List<LocalDate>> solicitud=new LinkedHashMap<>();solicitud.put(101L,List.of(fecha));solicitud.put(202L,List.of(fecha));
+        var datos=servicio.generarAnuncios(solicitud);assertEquals(9,datos.get(101L).size());assertTrue(datos.get(101L).stream().allMatch(f->f.impresiones()==2000));assertTrue(datos.get(202L).stream().allMatch(f->f.impresiones()==4000));
+        verify(http).post(eq("https://api.mockaroo.com/api/generate.json?count=18&array=true"),anyMap(),eq(CrmMockarooServicio.campos()),eq(false));
+    }
+    @Test void divideLaCargaInicialEnDescargasDeMenosDeMilFilas(){
+        var http=mock(CrmProveedorHttp.class);var servicio=new CrmMockarooServicio(http);
+        ReflectionTestUtils.setField(servicio,"habilitado",true);ReflectionTestUtils.setField(servicio,"apiKey","clave-prueba");
+        when(http.post(anyString(),anyMap(),any(),eq(false))).thenAnswer(inv->{String url=inv.getArgument(0);int n=Integer.parseInt(url.split("count=")[1].split("&")[0]);assertTrue(n<=1000);return respuesta(n);});
+        Map<Long,List<LocalDate>> solicitud=new LinkedHashMap<>();for(long i=1;i<=112;i++)solicitud.put(i,List.of(LocalDate.of(2026,1,1)));
+        var datos=servicio.generarAnuncios(solicitud);assertEquals(112,datos.size());assertTrue(datos.values().stream().allMatch(f->f.size()==9));verify(http,times(2)).post(anyString(),anyMap(),any(),eq(false));
+    }
     static ArrayNode respuesta(int n){ArrayNode a=new ObjectMapper().createArrayNode();for(int i=1;i<=n;i++)a.addObject().put("n",i).put("impresiones",2000).put("ctr_base",300).put("conversion_base",500).put("costo_centavos",50).put("ticket_centavos",2000);return a;}
     @Test void generaDatosCoherentesPorDiaYPaisSinSuperarMilFilas(){
         LocalDate d=LocalDate.of(2026,1,1);var dias=d.datesUntil(d.plusDays(90)).toList();var r=CrmMockarooServicio.interpretar(respuesta(810),dias);
