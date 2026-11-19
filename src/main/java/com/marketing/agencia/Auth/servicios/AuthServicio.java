@@ -66,7 +66,6 @@ public class AuthServicio {
         return construirSesion(usuario, respuestaSupabase);
     }
 
-    @Transactional(readOnly = true)
     public SesionRespuesta login(LoginRequest request) {
         RespuestaAuthSupabase respuestaSupabase = supabaseAuthServicio.iniciarSesion(
                 request.getCorreo(), request.getContrasena());

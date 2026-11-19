@@ -7,9 +7,13 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import com.marketing.agencia.config.ExcepcionApi;
 
 import java.nio.charset.StandardCharsets;
+import java.net.http.HttpClient;
+import java.time.Duration;
 
 @Service
 public class SupabaseAuthServicio {
@@ -19,8 +23,13 @@ public class SupabaseAuthServicio {
 
     public SupabaseAuthServicio(
             @Value("${supabase.url}") String urlSupabase,
-            @Value("${supabase.api-key:}") String claveApiSupabase) {
+            @Value("${supabase.api-key:}") String claveApiSupabase,
+            @Value("${supabase.auth.connect-timeout:5s}") Duration conexion,
+            @Value("${supabase.auth.read-timeout:15s}") Duration lectura) {
+        var peticiones = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(conexion).build());
+        peticiones.setReadTimeout(lectura);
         RestClient.Builder clienteConfigurado = RestClient.builder()
+                .requestFactory(peticiones)
                 .baseUrl(urlSupabase)
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE);
         this.claveApiConfigurada = claveApiSupabase != null && !claveApiSupabase.isBlank();
@@ -50,6 +59,7 @@ public class SupabaseAuthServicio {
 
     public RespuestaAuthSupabase iniciarSesion(String correo, String password) {
         validarClaveApi();
+        try {
         return clienteSupabase.post()
                 .uri("/auth/v1/token?grant_type=password")
                 .body(new CredencialesSupabase(correo, password))
@@ -64,6 +74,10 @@ public class SupabaseAuthServicio {
                             "No fue posible comunicarse con el servicio de autenticación");
                 })
                 .body(RespuestaAuthSupabase.class);
+        } catch (ResourceAccessException e) {
+            throw new ExcepcionApi(HttpStatus.SERVICE_UNAVAILABLE, "SUPABASE_TIEMPO_ESPERA",
+                    "El servicio de autenticación no respondió a tiempo. Intenta iniciar sesión nuevamente");
+        }
     }
 
     private void validarClaveApi() {
