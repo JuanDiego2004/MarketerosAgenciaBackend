@@ -30,7 +30,7 @@ class CrmAgenciaPostgresTests {
   admin=UUID.randomUUID();analista=UUID.randomUUID();autor=usuario("Administrador",admin);usuario("Analista",analista);
   long cliente=jdbc.queryForObject("insert into cliente(nombre,estado) values('Empresa contratos rollback','ACTIVO') returning id_cliente",Long.class);
   empresa=jdbc.queryForObject("select id from crm_cuenta where cliente_id=?",Long.class,cliente);
-  long canal=jdbc.queryForObject("select id_canal from campana where id_canal is not null limit 1",Long.class);
+  long canal=jdbc.queryForObject("select id_canal from canal_difusion where estado='ACTIVO' order by id_canal limit 1",Long.class);
   campana=jdbc.queryForObject("insert into campana(nombre,id_cliente,id_canal,objetivo,presupuesto_asignado,fecha_inicio,fecha_fin,estado,id_usuario_creador) values('Campaña contratos',?,?,'Objetivo',1000,current_date,current_date,'PLANIFICADA',?) returning id_campana",Long.class,cliente,canal,autor);
   cuenta=((Number)agencia.guardar("cuentas-publicitarias",null,Map.of("nombre","Cuenta de prueba","empresa_id",empresa,"codigo","ACC-"+UUID.randomUUID(),"plataforma","FACEBOOK","moneda","PEN"),admin).get("id")).longValue();
  }
@@ -40,6 +40,19 @@ class CrmAgenciaPostgresTests {
  Map<String,Object> datosAnuncio(long contrato){return new LinkedHashMap<>(Map.of("nombre","Video campaña","contrato_id",contrato,"cuenta_id",cuenta,"campana_id",campana,"codigo","AD-"+UUID.randomUUID(),"formato","VIDEO","fecha",LocalDate.now().toString()));}
  Map<String,Object> altaBase(String servicio){var d=datosContrato(servicio);d.put("objetivo","Servicio contextual");d.put("modalidad","ORGANICA");d.put("presupuesto",0);d.put("produccion",0);d.put("analisis_desde",LocalDate.now().minusDays(1).toString());d.put("analisis_hasta",LocalDate.now().toString());d.put("prestaciones",List.of(Map.of("prestacion","PUBLICACION","cantidad",2),Map.of("prestacion","ANALISIS","cantidad",2),Map.of("prestacion","INFORMES","cantidad",1)));return d;}
  Map<String,Object> planCanal(String plataforma){return Map.of("plataforma",plataforma,"objetivo","Reconocimiento","programado_en",OffsetDateTime.now().minusHours(1).toString(),"responsable_id",autor,"modalidad","ORGANICA","presupuesto",0);}
+ @Test void asistenteVinculaAudienciaExistenteYGuardaSuNombreCanonico()throws Exception{
+  long audiencia=jdbc.queryForObject("insert into segmento_audiencia(nombre,estado,ubicacion_geografica,id_usuario_creador) values('Jóvenes de Lima','ACTIVO','Lima, Perú',?) returning id_segmento",Long.class,autor);
+  var opciones=agencia.opciones(admin);assertTrue(((List<Map<String,Object>>)opciones.get("audiencias")).stream().anyMatch(a->((Number)a.get("idSegmento")).longValue()==audiencia));
+  var d=altaBase("DIFUSION");d.put("modalidad","PAGADA");d.put("presupuesto",500);
+  var canal=new LinkedHashMap<>(planCanal("FACEBOOK"));canal.put("modalidad","PAGADA");canal.put("presupuesto",300);canal.put("audiencia_id",audiencia);canal.put("audiencia","Nombre enviado incorrecto");canal.put("cobertura","");
+  d.put("piezas",List.of(Map.of("titulo","Anuncio de texto","descripcion","Contenido","formato","TEXTO","fuente","CLIENTE","canales",List.of(canal))));
+  UUID alta=UUID.randomUUID();contratacion.guardarAlta(alta,Map.of("datos",d,"version",0),admin);long contrato=((Number)contratacion.confirmar(alta,1,admin).get("id")).longValue();
+  assertEquals(1,jdbc.queryForObject("select count(*) from campana_audiencia ca join crm_acuerdo_campana c on c.campana_id=ca.id_campana where c.contrato_id=? and ca.id_segmento=?",Integer.class,contrato,audiencia));
+  assertEquals("Jóvenes de Lima",jdbc.queryForObject("select datos #>> '{piezas,0,canales,0,audiencia}' from crm_contrato_config where contrato_id=?",String.class,contrato));
+  assertEquals("Lima, Perú",jdbc.queryForObject("select datos #>> '{piezas,0,canales,0,cobertura}' from crm_contrato_config where contrato_id=?",String.class,contrato));
+  assertEquals(contrato,contratacion.confirmar(alta,1,admin).get("id"));
+  assertEquals(1,jdbc.queryForObject("select count(*) from segmento_audiencia where id_segmento=?",Integer.class,audiencia));
+ }
  @Test void asistenteDifusionCargaAntesDelContratoYConfirmaSinDuplicados()throws Exception{
   UUID id=UUID.randomUUID(),archivo=UUID.randomUUID();var d=altaBase("DIFUSION");contratacion.guardarAlta(id,Map.of("datos",d,"version",0),admin);byte[]video=new byte[32];System.arraycopy("ftypisom".getBytes(),0,video,4,8);contratacion.subir(id,archivo,new org.springframework.mock.web.MockMultipartFile("archivo","cliente.mp4","video/mp4",video),admin);
   d.put("piezas",List.of(Map.of("clave",UUID.randomUUID().toString(),"titulo","Video del cliente","descripcion","Contenido base","formato","VIDEO","fuente","CLIENTE","pendiente",false,"archivos",List.of(Map.of("id",archivo.toString())),"canales",List.of(planCanal("FACEBOOK"),planCanal("TIKTOK")))));contratacion.guardarAlta(id,Map.of("datos",d,"version",1),admin);

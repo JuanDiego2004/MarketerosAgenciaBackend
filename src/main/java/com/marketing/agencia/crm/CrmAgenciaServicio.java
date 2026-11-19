@@ -1,6 +1,7 @@
 package com.marketing.agencia.crm;
 
 import com.marketing.agencia.config.ExcepcionApi;
+import com.marketing.agencia.administrador.AdministradorServicio;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,6 +22,7 @@ public class CrmAgenciaServicio {
  private final CrmMockarooServicio mockaroo;
  private final TransactionTemplate tx;
  private final CrmAlcanceServicio alcance;
+ private final AdministradorServicio administrador;
  private static final Map<String,String> TABLAS=Map.of("cotizaciones","crm_acuerdo","contratos","crm_acuerdo","cuentas-publicitarias","crm_cuenta_publicitaria","anuncios","crm_anuncio","entregables","crm_trabajo_servicio","recomendaciones","crm_trabajo_servicio","ajustes","crm_trabajo_servicio","informes","crm_trabajo_servicio","servicios","crm_servicio");
  private static final Map<String,String> TIPOS=Map.of("entregables","ENTREGABLE","recomendaciones","RECOMENDACION","ajustes","AJUSTE","informes","INFORME");
  private String tabla(String r){if(!TABLAS.containsKey(r))throw new ExcepcionApi(HttpStatus.NOT_FOUND,"CRM_RECURSO_INVALIDO","Sección inexistente");return "public."+TABLAS.get(r);}
@@ -51,6 +53,9 @@ public class CrmAgenciaServicio {
   boolean catalogo=true;try{acceso.exigir(u,"campos",true);}catch(ExcepcionApi e){catalogo=false;}o.put("catalogoGestionar",catalogo);o.put("servicios",jdbc.queryForList("select * from public.crm_servicio order by codigo"));
   o.put("empresas",gestiona?jdbc.queryForList("select a.id,a.nombre from public.crm_cuenta a join public.cliente c on c.id_cliente=a.cliente_id where a.fusionada_en is null and c.estado='ACTIVO' order by a.nombre limit 1000"):List.of());
   o.put("usuarios",gestiona?jdbc.queryForList("select id_usuario id,nombres nombre from public.usuario where estado='ACTIVO' order by nombres limit 1000"):List.of());
+  o.put("audiencias",List.of());o.put("audienciasPermitidas",false);
+  if(gestiona)try{o.put("audiencias",administrador.listar("audiencias",u).stream().filter(a->"ACTIVO".equals(a.get("estado"))).toList());o.put("audienciasPermitidas",true);}catch(ExcepcionApi e){if(e.getEstadoHttp()!=HttpStatus.FORBIDDEN)throw e;}
+  o.put("objetivos",gestiona?jdbc.queryForList("select distinct objetivo from public.campana where objetivo is not null and btrim(objetivo)<>'' and length(objetivo)<=300 order by objetivo limit 100",String.class):List.of());
   o.put("contratos",jdbc.queryForList("select id,nombre,empresa_id,servicio,estado,moneda,desde,hasta from public.crm_acuerdo where tipo='CONTRATO' order by id desc limit 1000"));
   var cotizaciones=gestiona?jdbc.queryForList("select * from public.crm_acuerdo where tipo='COTIZACION' and estado='APROBADO' order by id desc limit 1000"):List.<Map<String,Object>>of();cotizaciones.forEach(c->c.put("prestaciones",alcance.listar(((Number)c.get("id")).longValue())));o.put("cotizaciones",cotizaciones);
   o.put("campanas",jdbc.queryForList("select c.id_campana id,c.nombre,a.id empresa_id,v.contrato_id from public.campana c join public.crm_cuenta a on a.cliente_id=c.id_cliente and a.fusionada_en is null left join public.crm_acuerdo_campana v on v.campana_id=c.id_campana order by c.nombre limit 1000"));
