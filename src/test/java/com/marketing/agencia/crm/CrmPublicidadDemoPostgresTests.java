@@ -71,7 +71,7 @@ class CrmPublicidadDemoPostgresTests {
         jdbc.update("insert into public.crm_gasto_meta(campana_id,fecha,moneda,importe,impresiones,clicks,cuenta_externa,campana_externa) values(?,?,'PEN',100,1000,10,'historica','historica')",campana,d);
         long contacto=jdbc.queryForObject("insert into public.crm_contacto(nombre,correo,estado,origen,campana_id,responsable_id) values(?,?,'NUEVO','WEB',?,?) returning id",Long.class,"Retorno rollback",UUID.randomUUID()+"@example.test",campana,autor);
         long etapa=jdbc.queryForObject("select id from public.crm_etapa where tipo='GANADA' order by orden limit 1",Long.class);
-        var operaciones=new CrmOperacionServicio(jdbc,new CrmAcceso(jdbc),new CrmEvolucionServicio(jdbc,new CrmAcceso(jdbc)));
+        var operaciones=new CrmOperacionServicio(jdbc,new CrmAcceso(jdbc),new CrmAlcanceServicio(jdbc),new CrmEvolucionServicio(jdbc,new CrmAcceso(jdbc)));
         operaciones.guardar("pipeline",null,Map.of("nombre","Venta registrada","contacto_id",contacto,"etapa_id",etapa,"responsable_id",autor,"valor","1200.00","moneda","PEN","probabilidad",100,"fecha_cierre",d.toString()),admin);
         var gasto=new HashMap<String,Object>(Map.of("campana_id",campana,"fecha",d.toString(),"moneda","PEN","concepto","Producción","importe","50.00","idempotencia",UUID.randomUUID().toString()));
         long inversion=((Number)servicio.inversion(gasto,admin).get("id")).longValue();assertEquals(inversion,servicio.inversion(gasto,admin).get("id"));

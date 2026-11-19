@@ -9,7 +9,7 @@ import static org.mockito.ArgumentMatchers.*;
 class CrmOperacionTests {
     final JdbcTemplate jdbc=mock(JdbcTemplate.class);
     final CrmAcceso acceso=mock(CrmAcceso.class);
-    final CrmOperacionServicio servicio=new CrmOperacionServicio(jdbc,acceso,mock(CrmEvolucionServicio.class));
+    final CrmOperacionServicio servicio=new CrmOperacionServicio(jdbc,acceso,mock(CrmAlcanceServicio.class),mock(CrmEvolucionServicio.class));
     final UUID sujeto=UUID.randomUUID();
     @BeforeEach void preparar(){when(acceso.exigir(eq(sujeto),anyString(),anyBoolean())).thenReturn(7L);when(jdbc.queryForObject(contains("lower(r.nombre_rol)"),eq(String.class),eq(7L))).thenReturn("analista");}
     @Test void noPermiteEditarTareaAjena(){when(jdbc.queryForList(contains("for update"),eq(1L))).thenReturn(List.of(Map.of("responsable_id",9L)));assertThrows(ExcepcionApi.class,()->servicio.guardar("actividades",1L,Map.of(),sujeto));verify(jdbc,never()).update(anyString(),any(Object[].class));}

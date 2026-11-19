@@ -39,6 +39,9 @@ class PrepararCrm {
             List<List<String>> grupos=List.of(List.of("crm_cuenta","crm_contacto","crm_consentimiento","crm_nota","crm_evento","crm_archivo","crm_auditoria"),List.of("crm_etapa","crm_oportunidad","crm_actividad","crm_segmento","crm_regla_score","crm_origen","crm_formulario","crm_meta","crm_contenido","crm_automatizacion","crm_ejecucion","crm_gasto_meta","crm_integracion_meta"),List.of("crm_etiqueta","crm_contacto_etiqueta","crm_transicion","crm_baja_email","crm_baja_token"),List.of("crm_campo","crm_campo_valor","crm_campos_revision","crm_flujo","crm_flujo_paso"),List.of("crm_conector","crm_gasto_google","crm_analitica","crm_baja_canal","crm_envio"),List.of("crm_whatsapp_mensaje","crm_whatsapp_estado"),List.of("crm_publicidad_demo","crm_publicidad_demo_metrica"),List.of("crm_inversion"),List.of("crm_empresa_migracion"));
             grupos=new ArrayList<>(grupos);
             grupos.add(List.of("crm_servicio","crm_acuerdo","crm_acuerdo_campana","crm_cuenta_publicitaria","crm_anuncio","crm_trabajo_servicio","crm_anuncio_metrica"));
+            grupos.add(List.of("crm_alcance_servicio","crm_media_anuncio","crm_informe_version","crm_portal_acceso","crm_revision_cliente"));
+            grupos.add(List.of("crm_alta_contrato","crm_alta_archivo","crm_contrato_config","crm_contrato_anuncio","crm_contrato_evento"));
+            grupos.add(List.of("crm_contrato_ampliacion"));
             for(int i=0;i<grupos.size();i++){
                 var tablas=grupos.get(i);long presentes=tablas.stream().filter(existentes::contains).count();
                 if(presentes==tablas.size()){System.out.println("crm-v"+(i+1)+": tablas ya presentes; no se vuelve a ejecutar.");continue;}

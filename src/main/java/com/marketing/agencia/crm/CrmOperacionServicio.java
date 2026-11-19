@@ -16,6 +16,7 @@ import java.util.*;
 public class CrmOperacionServicio {
     private final JdbcTemplate jdbc;
     private final CrmAcceso acceso;
+    private final CrmAlcanceServicio alcance;
     private final CrmEvolucionServicio evolucion;
     static final Map<String,String> TABLAS=Map.ofEntries(
         Map.entry("pipeline","crm_oportunidad"),Map.entry("etapas","crm_etapa"),Map.entry("actividades","crm_actividad"),
@@ -76,6 +77,7 @@ public class CrmOperacionServicio {
         if(r.equals("etapas")&&id!=null&&!Objects.equals(anterior.get("tipo"),d.get("tipo"))&&jdbc.queryForObject("select count(*) from public.crm_oportunidad where etapa_id=?",Long.class,id)>0)throw invalido("No se puede cambiar el tipo de una etapa con oportunidades. Crea otra etapa.");
         if(propio&&Set.of("actividades","contenido").contains(r)&&numero(d,"responsable_id")!=autor)throw prohibido();
         if(r.equals("contenido")) {
+            if(d.get("campana_id")!=null&&alcance.listo()){var vinculados=jdbc.queryForList("select contrato_id from public.crm_acuerdo_campana where campana_id=?",d.get("campana_id"));if(!vinculados.isEmpty()){long contrato=((Number)vinculados.getFirst().get("contrato_id")).longValue();if(alcance.limite(contrato,"PRODUCCION")+alcance.limite(contrato,"EDICION")+alcance.limite(contrato,"PUBLICACION")==0)throw invalido("El contrato no incluye gestión de contenido");}}
             if(id!=null&&Boolean.TRUE.equals(jdbc.queryForObject("select to_regclass('public.crm_anuncio') is not null",Boolean.class))&&jdbc.queryForObject("select count(*) from public.crm_anuncio where contenido_id=? and estado in ('PROGRAMADO','PUBLICADO_SIMULADO','FINALIZADO')",Integer.class,id)>0)throw invalido("El contenido ya forma parte de una publicación. Crea una nueva pieza para una revisión posterior");
             if(d.get("campana_id")!=null && Boolean.TRUE.equals(jdbc.queryForObject("select to_regclass('public.crm_acuerdo_campana') is not null",Boolean.class)) && jdbc.queryForObject("select count(*) from public.crm_acuerdo_campana v join public.crm_acuerdo a on a.id=v.contrato_id where v.campana_id=? and a.servicio='ANALISIS'",Integer.class,d.get("campana_id"))>0)throw invalido("El contrato de solo análisis no permite crear ni editar contenido de la campaña");
             String previo=Objects.toString(anterior.get("estado"),"BORRADOR");String nuevo=d.get("estado").toString();
