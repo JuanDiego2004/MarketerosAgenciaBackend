@@ -23,6 +23,21 @@ class PrepararCrm {
             }
             Set<String> existentes=new HashSet<>();try(ResultSet r=s.executeQuery("select table_name from information_schema.tables where table_schema='public' and table_name like 'crm_%'")){while(r.next())existentes.add(r.getString(1));}
             System.out.println("Tablas CRM existentes: "+new TreeSet<>(existentes));
+            if(List.of(args).contains("--portal-analitica")) {
+                if(List.of(args).contains("--aplicar")) {
+                    s.execute(Files.readString(Path.of("src/main/resources/sql/crm-v14.sql")));
+                    System.out.println("crm-v14 aplicada: consulta del portal y aislamiento RLS.");
+                } else {
+                    try(ResultSet r=s.executeQuery("select to_regprocedure('public.crm_portal_estadisticas(date,date,bigint,bigint,text,text,text,text)') is not null")) {
+                        r.next(); System.out.println("Consulta de analítica instalada: "+r.getBoolean(1));
+                    }
+                    try(ResultSet r=s.executeQuery("select tablename,policyname,permissive from pg_policies where schemaname='public' and policyname like 'portal_cliente_%' order by tablename,policyname")) {
+                        while(r.next())System.out.println(r.getString(1)+" · "+r.getString(2)+" · "+r.getString(3));
+                    }
+                    System.out.println("Usa --portal-analitica --aplicar para habilitar la consulta sobre las tablas existentes.");
+                }
+                return;
+            }
             if(List.of(args).contains("--dashboard")) {
                 if(List.of(args).contains("--aplicar")) {
                     s.execute(Files.readString(Path.of("src/main/resources/sql/dashboard-v1.sql")));

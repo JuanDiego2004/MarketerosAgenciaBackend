@@ -17,6 +17,15 @@ import static com.marketing.agencia.crm.CrmOperacionServicio.*;
 @Service @RequiredArgsConstructor
 public class CrmEntregaServicio {
  private final JdbcTemplate jdbc;private final CrmAcceso acceso;private final CrmAgenciaServicio agencia;private final CrmAlcanceServicio alcance;private final CrmOperacionServicio auditoria;private final CrmInformePdf pdf;private final ObjectMapper json;
+ private static final String ANUNCIOS_PORTAL = """
+  from public.crm_acuerdo visible
+  join public.crm_cuenta empresa on empresa.id=visible.empresa_id
+  join public.crm_anuncio a on (a.contrato_id=visible.id or exists(
+    select 1 from public.crm_contrato_anuncio v where v.anuncio_id=a.id and v.contrato_id=visible.id))
+  join public.crm_acuerdo origen on origen.id=a.contrato_id and origen.empresa_id=visible.empresa_id
+  join public.crm_cuenta_publicitaria cuenta on cuenta.id=a.cuenta_id and cuenta.empresa_id=visible.empresa_id
+  join public.campana ca on ca.id_campana=a.campana_id and ca.id_cliente=empresa.cliente_id
+  """;
  private long leer(UUID u){return acceso.exigir(u,"atribucion",false);}private long gestionar(UUID u){return acceso.exigir(u,"cuentas",true);}
  private Map<String,Object> contrato(long id){var filas=jdbc.queryForList("select * from public.crm_acuerdo where id=? and tipo='CONTRATO'",id);if(filas.isEmpty())throw noExiste();return filas.getFirst();}
  private ExcepcionApi noExiste(){return new ExcepcionApi(HttpStatus.NOT_FOUND,"CRM_ENTREGA_NO_EXISTE","Registro no disponible");}
@@ -42,7 +51,22 @@ public class CrmEntregaServicio {
   throw invalido("Formato inválido. Selecciona PNG, JPEG, MP4 o WebM");
  }
  private static String imagen(byte[] b,String mime){try(var in=javax.imageio.ImageIO.createImageInputStream(new ByteArrayInputStream(b))){var r=javax.imageio.ImageIO.getImageReaders(in);if(!r.hasNext())throw new IOException();var lector=r.next();try{lector.setInput(in);if((long)lector.getWidth(0)*lector.getHeight(0)>20000000)throw new IOException();}finally{lector.dispose();}return mime;}catch(IOException e){throw invalido("La imagen está dañada o supera 20 megapíxeles");}}
- public Map<String,Object> archivo(long id,UUID u,boolean portal){var f=jdbc.queryForList("select m.*,c.empresa_id from public.crm_media_anuncio m join public.crm_anuncio a on a.id=m.anuncio_id join public.crm_acuerdo c on c.id=a.contrato_id where m.id=?",id);if(f.isEmpty())throw noExiste();var m=f.getFirst();if(portal){if(empresaPortal(u)!=((Number)m.get("empresa_id")).longValue())throw noExiste();if(jdbc.queryForObject("select count(*) from public.crm_revision_cliente where media_id=? and estado<>'ANULADA'",Integer.class,id)==0)throw noExiste();}else leer(u);return m;}
+ public Map<String,Object> archivo(long id,UUID u,boolean portal) {
+  var filas=jdbc.queryForList("""
+   select m.*,c.empresa_id,c.servicio,c.estado contrato_estado,a.contrato_id
+   from public.crm_media_anuncio m join public.crm_anuncio a on a.id=m.anuncio_id
+   join public.crm_acuerdo c on c.id=a.contrato_id where m.id=?
+   """,id);
+  if(filas.isEmpty())throw noExiste();
+  var medio=filas.getFirst();
+  if(portal) {
+   if(empresaPortal(u)!=((Number)medio.get("empresa_id")).longValue())throw noExiste();
+   if("ANALISIS".equals(medio.get("servicio"))||Set.of("BORRADOR","EN_REVISION").contains(medio.get("contrato_estado")))throw noExiste();
+   alcance.exigir(((Number)medio.get("contrato_id")).longValue(),"PUBLICACION");
+   if(jdbc.queryForObject("select count(*) from public.crm_revision_cliente where media_id=? and estado<>'ANULADA'",Integer.class,id)==0)throw noExiste();
+  } else leer(u);
+  return medio;
+ }
  public Map<String,Object> comparar(long contrato,LocalDate desde,LocalDate hasta,List<Long> anuncios,UUID u){
   leer(u);contrato(contrato);CrmPublicidadDemoServicio.periodo(desde,hasta);if(anuncios.isEmpty()||anuncios.size()>10||new HashSet<>(anuncios).size()!=anuncios.size())throw invalido("Selecciona de 1 a 10 anuncios distintos");
   long dias=java.time.temporal.ChronoUnit.DAYS.between(desde,hasta)+1;LocalDate anterior=desde.minusDays(dias);List<Map<String,Object>> resultados=new ArrayList<>();
@@ -66,9 +90,31 @@ public class CrmEntregaServicio {
  @Transactional public void asignar(Map<String,Object>d,UUID u){long autor=acceso.exigir(u,"campos",true),usuario=numero(d,"usuario_id"),empresa=numero(d,"empresa_id");if(jdbc.queryForObject("select count(*) from public.usuario u join public.rol r using(id_rol) where u.id_usuario=? and lower(r.nombre_rol)='cliente' and u.estado='ACTIVO'",Integer.class,usuario)!=1)throw invalido("Selecciona un usuario activo con rol Cliente");if(jdbc.queryForObject("select count(*) from public.crm_cuenta where id=? and fusionada_en is null",Integer.class,empresa)!=1)throw invalido("Empresa inexistente");if(!(d.get("activo") instanceof Boolean))throw invalido("Indica el estado del acceso");int version=entero(d,"version",-1,Integer.MAX_VALUE);if(version<0){jdbc.update("insert into public.crm_portal_acceso(usuario_id,empresa_id,activo,otorgado_por) values(?,?,?,?)",usuario,empresa,d.get("activo"),autor);}else if(jdbc.update("update public.crm_portal_acceso set empresa_id=?,activo=?,version=version+1,otorgado_por=?,updated_at=now() where usuario_id=? and version=?",empresa,d.get("activo"),autor,usuario,version)==0)throw new ExcepcionApi(HttpStatus.CONFLICT,"CRM_CONCURRENCIA","El acceso cambió; actualiza antes de guardar");auditoria.auditar("agencia_portal",usuario,"ASIGNAR_EMPRESA",autor);}
  private long empresaPortal(UUID u){var filas=jdbc.queryForList("select p.empresa_id from public.crm_portal_acceso p join public.usuario u on u.id_usuario=p.usuario_id join public.rol r using(id_rol) where u.id_supabase=? and u.estado='ACTIVO' and lower(r.nombre_rol)='cliente' and p.activo",u);if(filas.isEmpty())throw new ExcepcionApi(HttpStatus.FORBIDDEN,"CRM_PORTAL_DENEGADO","Tu usuario no tiene un acceso activo al portal de una empresa");return ((Number)filas.getFirst().get("empresa_id")).longValue();}
  private void exigirContratoPortal(long id,UUID u){var c=contrato(id);if(((Number)c.get("empresa_id")).longValue()!=empresaPortal(u)||Set.of("BORRADOR","EN_REVISION").contains(c.get("estado")))throw noExiste();}
- private Map<String,Object> resultadosPortal(long id){return CrmPublicidadDemoServicio.resumen(jdbc.queryForList("select sum(m.impresiones) impresiones,sum(m.clics) clics,sum(m.conversiones) conversiones,sum(m.inversion) inversion,sum(m.ingresos) ingresos from public.crm_anuncio_metrica m join public.crm_anuncio a on a.id=m.anuncio_id where (a.contrato_id=? or exists(select 1 from public.crm_contrato_anuncio v where v.anuncio_id=a.id and v.contrato_id=?)) group by a.contrato_id",id,id));}
+ private Map<String,Object> resultadosPortal(long id) {
+  // Compatibilidad con el resumen anterior: solo importes en la moneda del contrato.
+  // La analítica nueva ofrece las distintas monedas separadas mediante Supabase RLS.
+  return CrmPublicidadDemoServicio.resumen(jdbc.queryForList(
+   "select sum(m.impresiones) impresiones,sum(m.clics) clics,sum(m.conversiones) conversiones,sum(m.inversion) inversion,sum(m.ingresos) ingresos "
+    +ANUNCIOS_PORTAL+" join public.crm_anuncio_metrica m on m.anuncio_id=a.id where visible.id=? and cuenta.moneda=visible.moneda",id));
+ }
  public Map<String,Object> portal(UUID u){long empresa=empresaPortal(u);return Map.of("empresa",jdbc.queryForMap("select id,nombre from public.crm_cuenta where id=?",empresa),"contratos",jdbc.queryForList("select id,nombre,servicio,desde,hasta,moneda,honorarios,produccion,presupuesto,estado,alcance from public.crm_acuerdo where empresa_id=? and tipo='CONTRATO' and estado not in ('BORRADOR','EN_REVISION') order by id desc limit 100",empresa));}
- public Map<String,Object> portalContrato(long id,UUID u){exigirContratoPortal(id,u);var c=contrato(id);if(Set.of("BORRADOR","EN_REVISION").contains(c.get("estado")))throw noExiste();return Map.of("resultados",resultadosPortal(id),"prestaciones",alcance.listar(id),"anuncios",jdbc.queryForList("select a.id,a.nombre,a.codigo,a.fecha,a.estado,a.formato from public.crm_anuncio a where (a.contrato_id=? or exists(select 1 from public.crm_contrato_anuncio v where v.anuncio_id=a.id and v.contrato_id=?)) order by fecha desc limit 200",id,id),"revisiones",jdbc.queryForList("select r.id,r.anuncio_id,a.nombre,a.codigo,r.media_id,r.estado,r.observacion,r.version from public.crm_revision_cliente r join public.crm_anuncio a on a.id=r.anuncio_id where a.contrato_id=? and r.estado<>'ANULADA' order by r.id desc limit 200",id),"entregables",jdbc.queryForList("select nombre,descripcion,cantidad,estado,fecha from public.crm_trabajo_servicio where contrato_id=? and tipo='ENTREGABLE' order by fecha limit 200",id),"informes",versiones(id,u,true));}
+ public Map<String,Object> portalContrato(long id,UUID u){exigirContratoPortal(id,u);var c=contrato(id);if(Set.of("BORRADOR","EN_REVISION").contains(c.get("estado")))throw noExiste();return Map.of("resultados",resultadosPortal(id),"prestaciones",alcance.listar(id),"anuncios",jdbc.queryForList("select a.id,a.nombre,a.codigo,a.fecha,a.estado,a.formato "+ANUNCIOS_PORTAL+" where visible.id=? order by a.fecha desc limit 200",id),"revisiones",jdbc.queryForList("select r.id,r.anuncio_id,a.nombre,a.codigo,r.media_id,r.estado,r.observacion,r.version from public.crm_revision_cliente r join public.crm_anuncio a on a.id=r.anuncio_id where a.contrato_id=? and r.estado<>'ANULADA' order by r.id desc limit 200",id),"entregables",jdbc.queryForList("select nombre,descripcion,cantidad,estado,fecha from public.crm_trabajo_servicio where contrato_id=? and tipo='ENTREGABLE' order by fecha limit 200",id),"informes",versiones(id,u,true));}
  @Transactional public void solicitarRevision(long ad,UUID u){long autor=gestionar(u);var a=anuncio(ad);operativo(a);alcance.exigir(((Number)a.get("contrato_id")).longValue(),"PUBLICACION");jdbc.queryForList("select id from public.crm_anuncio where id=? for update",ad);var medios=listaMedios(ad);if(medios.isEmpty())throw invalido("Sube un material antes de solicitar aprobación");jdbc.update("update public.crm_revision_cliente set estado='ANULADA',version=version+1 where anuncio_id=? and estado='RECHAZADO'",ad);jdbc.update("insert into public.crm_revision_cliente(anuncio_id,media_id,solicitado_por) values(?,?,?)",ad,medios.getFirst().get("id"),autor);auditoria.auditar("agencia_anuncios",ad,"SOLICITAR_APROBACION_CLIENTE",autor);}
- @Transactional public void responder(long revision,Map<String,Object>d,UUID u){long empresa=empresaPortal(u);var filas=jdbc.queryForList("select r.*,c.empresa_id from public.crm_revision_cliente r join public.crm_anuncio a on a.id=r.anuncio_id join public.crm_acuerdo c on c.id=a.contrato_id where r.id=? for update of r",revision);if(filas.isEmpty()||((Number)filas.getFirst().get("empresa_id")).longValue()!=empresa)throw noExiste();String estado=opcion(d,"estado","APROBADO","RECHAZADO"),observacion=texto(d,"observacion",2000,estado.equals("RECHAZADO"));long usuario=jdbc.queryForObject("select id_usuario from public.usuario where id_supabase=?",Long.class,u);if(jdbc.update("update public.crm_revision_cliente set estado=?,observacion=?,respondido_por=?,respondido_en=now(),version=version+1 where id=? and version=? and estado='PENDIENTE'",estado,observacion,usuario,revision,entero(d,"version",0,Integer.MAX_VALUE))==0)throw new ExcepcionApi(HttpStatus.CONFLICT,"CRM_CONCURRENCIA","La revisión ya cambió. Actualiza el portal");auditoria.auditar("agencia_anuncios",((Number)filas.getFirst().get("anuncio_id")).longValue(),"CLIENTE_"+estado,usuario);}
+ @Transactional public void responder(long revision,Map<String,Object> d,UUID u) {
+  long empresa=empresaPortal(u);
+  var filas=jdbc.queryForList("""
+   select r.*,c.empresa_id,c.servicio,c.estado contrato_estado,a.contrato_id
+   from public.crm_revision_cliente r join public.crm_anuncio a on a.id=r.anuncio_id
+   join public.crm_acuerdo c on c.id=a.contrato_id where r.id=? for update of r
+   """,revision);
+  if(filas.isEmpty()||((Number)filas.getFirst().get("empresa_id")).longValue()!=empresa)throw noExiste();
+  var fila=filas.getFirst();
+  operativo(fila);
+  alcance.exigir(((Number)fila.get("contrato_id")).longValue(),"PUBLICACION");
+  String estado=opcion(d,"estado","APROBADO","RECHAZADO"),observacion=texto(d,"observacion",2000,estado.equals("RECHAZADO"));
+  long usuario=jdbc.queryForObject("select id_usuario from public.usuario where id_supabase=?",Long.class,u);
+  if(jdbc.update("update public.crm_revision_cliente set estado=?,observacion=?,respondido_por=?,respondido_en=now(),version=version+1 where id=? and version=? and estado='PENDIENTE'",estado,observacion,usuario,revision,entero(d,"version",0,Integer.MAX_VALUE))==0)
+   throw new ExcepcionApi(HttpStatus.CONFLICT,"CRM_CONCURRENCIA","La revisión ya cambió. Actualiza el portal");
+  auditoria.auditar("agencia_anuncios",((Number)fila.get("anuncio_id")).longValue(),"CLIENTE_"+estado,usuario);
+ }
 }
