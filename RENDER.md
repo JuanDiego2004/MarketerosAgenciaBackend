@@ -33,19 +33,29 @@ Spring Boot ya escucha en `0.0.0.0` y toma el puerto de `PORT`. Render usa 10000
 | `DB_PASSWORD` | Contraseña de la base |
 | `SUPABASE_URL` | URL del mismo proyecto de autenticación que utiliza el frontend |
 | `SUPABASE_PUBLISHABLE_KEY` | Clave pública/publicable del proyecto que requiere el backend; no usar la contraseña de la base |
-| `APP_CORS_ALLOWED_ORIGINS` | Orígenes exactos del frontend separados por comas, por ejemplo `http://localhost:5173,https://TU_FRONTEND` sin rutas ni barra final |
+| `APP_CORS_ALLOWED_ORIGINS` | `https://marketerosfrontend.onrender.com`; para desarrollo añadir `,http://localhost:5173,http://localhost:3000`. Sin rutas ni barra final |
 | `PORT` | Render lo define; el Blueprint utiliza 10000 |
 | `CRM_PUBLIC_URL` | Dominio HTTPS real del nuevo servicio de Render, sin `/api` al final |
 | `CRM_AUTOMATIZACIONES_HABILITADAS` | Mantener `false` durante configuración y pruebas |
-| `CRM_SMTP_ONE_CLICK` | Mantener `false` salvo que el proveedor firme las cabeceras de baja con DKIM |
+| `BREVO_API_KEY` | Clave API de Brevo (`xkeysib-...`); mantenerla solo en el backend |
+| `BREVO_API_URL` | `https://api.brevo.com/v3/smtp/email` para envíos transaccionales |
+| `CRM_SMTP_FROM` | Dirección remitente registrada y verificada en Brevo |
 
 Después de conocer el dominio del servicio, establecer `CRM_PUBLIC_URL` con esa dirección y volver a desplegar/aplicar las variables. Actualizar cualquier valor anterior que apuntara a Railway o localhost.
 
-Las variables de Mockaroo, WhatsApp, Twilio y SMTP son opcionales para arrancar, pero necesarias para sus respectivas funciones. Los conectores de publicidad Meta, Google Ads y GA4 se retiraron; no requieren credenciales en esta versión. Copiar únicamente las que se vayan a utilizar desde `.env.crm.example`. No se incluyen en la imagen ni en el Blueprint. Los estados «configurado» no prueban la validez de la cuenta del proveedor.
+Para Brevo, crear una **API key** en **SMTP & API → API keys** (comienza con `xkeysib-`; la SMTP key `xsmtpsib-` no sirve para esta integración) y registrar/verificar el remitente en **Senders & IPs**. En Render, configurar `BREVO_API_KEY` con esa clave y `CRM_SMTP_FROM` con el correo verificado. No colocar la clave en el frontend ni en una variable `VITE_*`.
+
+Las variables de Mockaroo, WhatsApp Cloud y Brevo son opcionales para arrancar, pero necesarias para sus respectivas funciones. El correo utiliza Brevo Email API y WhatsApp Cloud es el único canal de mensajería. Los conectores de publicidad Meta, Google Ads y GA4 se retiraron; no requieren credenciales en esta versión. Copiar únicamente las que se vayan a utilizar desde `.env.crm.example`. No se incluyen en la imagen ni en el Blueprint. Los estados «configurado» no prueban la validez de la cuenta del proveedor.
 
 La base de datos debe tener aplicadas las migraciones correspondientes. No se ejecutan automáticamente al arrancar ni al construir la imagen. La base configurada en esta sesión ya tiene CRM v1–v8; si Render utiliza otra base, inventariarla y aplicar las migraciones antes de arrancar. No ejecutar todos los scripts de nuevo sobre tablas existentes.
 
 ## Blueprint opcional
+
+En local, Spring Boot carga las variables del archivo `.env` situado junto al `pom.xml`. En Render, agrega los secretos en **Environment** del servicio y vuelve a desplegar; no se leen archivos `.env` locales en Render.
+
+Para el frontend ya publicado, establecer `APP_CORS_ALLOWED_ORIGINS=https://marketerosfrontend.onrender.com` en Environment del backend y guardar/desplegar. Si existe una variable anterior, actualizarla: los valores del entorno prevalecen sobre los predeterminados del código. Las seis pruebas `CorsRenderTests` cubren preflight de login/CRM, peticiones públicas, localhost, rechazo de otros dominios y autenticación conservada.
+
+El frontend utiliza `VITE_API_URL=https://marketerosagenciabackend.onrender.com`. Su Static Site requiere una regla Rewrite de `/*` a `/index.html` para poder recargar rutas como `/login` y `/contratos`; se preparó también `MarketingSystem/render.yaml`.
 
 `render.yaml` permite crear el servicio desde **New → Blueprint**. Está preparado para un repositorio cuya raíz es el backend. Los valores `sync: false` se solicitan en Render durante la creación inicial; las integraciones opcionales se añaden después desde Environment.
 
@@ -64,7 +74,7 @@ Una vez que el servicio esté operativo:
 
 Render suspende los servicios gratuitos después de 15 minutos sin tráfico entrante. El arranque en frío puede retrasar la recepción del webhook; las tareas programadas no se ejecutan mientras el servicio está suspendido.
 
-Además, los servicios gratuitos bloquean conexiones salientes a los puertos **25, 465 y 587**. El SMTP configurado por este backend usa normalmente 587, así que no funcionará desde ese plan. Para mantener este conector SMTP y el proceso siempre activo se necesita un plan que permita esas conexiones y ejecución continua. La elección/contratación del plan queda a cargo del usuario; no se ha creado ningún servicio ni contratado un plan.
+El servicio gratuito se suspende después de 15 minutos sin tráfico. Los envíos de correo usan la API HTTPS de Brevo, así que no dependen de puertos SMTP.
 
 ## Prueba Docker local
 

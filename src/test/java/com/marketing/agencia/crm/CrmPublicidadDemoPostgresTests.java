@@ -9,7 +9,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc @Transactional @EnabledIfEnvironmentVariable(named="CRM_PRUEBAS_BD",matches="true")
 class CrmPublicidadDemoPostgresTests {
     @Autowired JdbcTemplate jdbc;@Autowired MockMvc mvc;@Autowired ObjectMapper json;@Autowired CrmPublicidadDemoServicio servicio;
-    @MockitoBean CrmProveedorHttp http;@MockitoBean JwtDecoder decoder;@MockitoBean JavaMailSender correo;
+    @MockitoBean CrmProveedorHttp http;@MockitoBean JwtDecoder decoder;
     UUID admin,analista,lider;long autor,campana;
     @BeforeEach void preparar(){
         admin=UUID.randomUUID();analista=UUID.randomUUID();lider=UUID.randomUUID();autor=usuario("Administrador",admin);usuario("Analista",analista);usuario("Líder",lider);

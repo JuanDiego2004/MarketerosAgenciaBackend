@@ -1,15 +1,12 @@
 package com.marketing.agencia.crm;
 
 import com.fasterxml.jackson.databind.*;
-import jakarta.mail.Session;
-import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.*;
@@ -23,8 +20,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** JWT y SMTP simulados; consultas, permisos y transacciones PostgreSQL reales, con rollback. */
-@SpringBootTest(properties={"spring.mail.host=smtp.example.test","crm.public-url=https://crm.example.test","crm.smtp.from=marketing@example.test","crm.smtp.one-click=true","crm.automatizaciones.habilitadas=false","crm.google.client-id=test","crm.google.client-secret=test","crm.google.refresh-token=test","crm.google.developer-token=","crm.whatsapp.token=test","crm.whatsapp.app-secret=secreto-app-solo-pruebas-no-real","crm.whatsapp.verify-token=verificacion-solo-pruebas-1234567890","crm.whatsapp.phone-id=123456","crm.twilio.account-sid=AC00000000000000000000000000000000","crm.twilio.auth-token=test","crm.twilio.from=+15005550006"})
+/** JWT y proveedores HTTP simulados; consultas, permisos y transacciones PostgreSQL reales, con rollback. */
+@SpringBootTest(properties={"crm.public-url=https://crm.example.test","crm.email.from=marketing@example.test","crm.brevo.api-key=xkeysib-test","crm.automatizaciones.habilitadas=false","crm.google.client-id=test","crm.google.client-secret=test","crm.google.refresh-token=test","crm.google.developer-token=","crm.whatsapp.token=test","crm.whatsapp.app-secret=secreto-app-solo-pruebas-no-real","crm.whatsapp.verify-token=verificacion-solo-pruebas-1234567890","crm.whatsapp.phone-id=123456"})
 @AutoConfigureMockMvc @Transactional
 @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named="CRM_PRUEBAS_BD",matches="true")
 class CrmEvolucionPostgresTests {
@@ -43,7 +40,6 @@ class CrmEvolucionPostgresTests {
     @Autowired CrmWhatsAppServicio whatsapp;
     @MockitoBean CrmProveedorHttp http;
     @MockitoBean JwtDecoder decoder;
-    @MockitoBean JavaMailSender correo;
     UUID admin,lider,analista;
     long usuarioAdmin,usuarioLider,usuarioAnalista,campana;
     @BeforeEach void usuarios(){
@@ -177,16 +173,9 @@ class CrmEvolucionPostgresTests {
         mvc.perform(get("/api/crm/operaciones/conectores/estado").header("Authorization","Bearer "+admin)).andExpect(status().isMethodNotAllowed());
         verifyNoInteractions(http);
     }
-    @Test void mensajeriaConsentimientoBajaPorCanalYResultadoInciertoNoReintenta()throws Exception{
-        long c=contacto();jdbc.update("update public.crm_contacto set telefono='51987654321' where id=?",c);for(String canal:List.of("SMS","WHATSAPP"))jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING',?,now(),?)",c,canal,usuarioAdmin);
-        when(http.post(contains("twilio"),anyMap(),any(),eq(true))).thenReturn(json.readTree("{\"sid\":\"SM-test-only\",\"status\":\"queued\"}"));
-        long sms=flujoMensajeria(c,"SMS",Map.of("mensaje","Hola {{nombre}}"));integraciones.ejecutar(sms,admin);integraciones.ejecutar(sms,admin);
-        verify(http,times(1)).post(contains("twilio"),anyMap(),argThat(o->o instanceof Map<?,?> m&&m.get("To").equals("+51987654321")&&m.get("Body").toString().contains("Baja: https://crm.example.test/api/bajas/")),eq(true));
-        assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,sms));
-        String enlace=bajas.enlace(c,"SMS");String baja=enlace.substring(enlace.lastIndexOf('/')+1);mvc.perform(get("/api/bajas/"+baja)).andExpect(status().isOk());assertTrue(mensajeria.consentido(c,"SMS"));mvc.perform(post("/api/bajas/"+baja)).andExpect(status().isOk());assertFalse(mensajeria.consentido(c,"SMS"));assertTrue(mensajeria.consentido(c,"WHATSAPP"));
-        jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING','SMS',now(),?)",c,usuarioAdmin);assertFalse(mensajeria.consentido(c,"SMS"));integraciones.ejecutar(flujoMensajeria(c,"SMS",Map.of("mensaje","No debe enviarse")),admin);verify(http,times(1)).post(contains("twilio"),anyMap(),any(),anyBoolean());
-        assertEquals(List.of("SMS"),evolucion.relaciones(c,admin).get("canalesSuprimidos"));
-        long ejecucionSms=jdbc.queryForObject("select id from public.crm_ejecucion where automatizacion_id=?",Long.class,sms);assertEquals("SM-test-only",flujos.historial(sms,ejecucionSms,admin).stream().filter(p->p.get("proveedor_id")!=null).findFirst().orElseThrow().get("proveedor_id"));
+    @Test void mensajeriaWhatsAppRespetaConsentimientoYResultadoInciertoNoReintenta()throws Exception{
+        long c=contacto();jdbc.update("update public.crm_contacto set telefono='51987654321' where id=?",c);
+        jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING','WHATSAPP',now(),?)",c,usuarioAdmin);
         Map<String,Object>plantilla=Map.of("plantilla","bienvenida","idioma","es","parametros","{{nombre}}\n{{baja}}");
         when(http.post(contains("graph.facebook"),anyMap(),any(),eq(false))).thenReturn(json.readTree("{\"messages\":[{\"id\":\"wamid.test\"}]}"));
         long wa=flujoMensajeria(c,"WHATSAPP",plantilla);integraciones.ejecutar(wa,admin);assertEquals("ACEPTADO",jdbc.queryForObject("select estado from public.crm_envio where ejecucion_id=(select id from public.crm_ejecucion where automatizacion_id=?)",String.class,wa));
@@ -272,11 +261,13 @@ class CrmEvolucionPostgresTests {
         jdbc.update("insert into public.crm_consentimiento(contacto_id,tipo,canal,fecha,registrado_por) values(?,'MARKETING','EMAIL',now(),?)",c,usuarioAdmin);
         long s=((Number)operaciones.guardar("segmentos",null,Map.of("nombre","Email segmento prueba","origen",origen),admin).get("id")).longValue();
         long flujo=((Number)operaciones.guardar("automatizaciones",null,Map.of("nombre","Email flujo prueba","segmento_id",s,"accion","EMAIL","asunto","Prueba","mensaje","Hola {{nombre}}","activa",true),admin).get("id")).longValue();
-        MimeMessage mensaje=new MimeMessage(Session.getInstance(new Properties()));when(correo.createMimeMessage()).thenReturn(mensaje);
-        assertEquals(1,integraciones.ejecutar(flujo,admin).get("procesados"));verify(correo).send(mensaje);
-        assertEquals("List-Unsubscribe=One-Click",mensaje.getHeader("List-Unsubscribe-Post",null));
-        String url=mensaje.getHeader("List-Unsubscribe",null).replace("<","").replace(">","");String token=url.substring(url.lastIndexOf('/')+1);
-        assertFalse(mensaje.getContent().toString().contains("null"));assertTrue(mensaje.getContent().toString().contains(url));
+        when(http.post(contains("api.brevo.com"),anyMap(),any(),eq(false))).thenReturn(json.readTree("{\"messageId\":\"test-message\"}"));
+        assertEquals(1,integraciones.ejecutar(flujo,admin).get("procesados"));
+        var solicitud=org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(http).post(contains("api.brevo.com"),argThat(h->h.get("api-key").equals("xkeysib-test")),solicitud.capture(),eq(false));
+        Map<?,?> payload=(Map<?,?>)solicitud.getValue();Map<?,?> headers=(Map<?,?>)payload.get("headers");
+        String url=headers.get("List-Unsubscribe").toString().replace("<","").replace(">","");String token=url.substring(url.lastIndexOf('/')+1);
+        assertFalse(payload.get("textContent").toString().contains("null"));assertTrue(payload.get("textContent").toString().contains(url));
         mvc.perform(get("/api/bajas/"+token)).andExpect(status().isOk());assertTrue(integraciones.consentido(c));
         mvc.perform(post("/api/bajas/"+token).contentType(MediaType.APPLICATION_FORM_URLENCODED).content("List-Unsubscribe=One-Click")).andExpect(status().isOk());
         assertFalse(integraciones.consentido(c));bajas.revocar(token);assertEquals(1,jdbc.queryForObject("select count(*) from public.crm_baja_email where contacto_id=?",Integer.class,c));

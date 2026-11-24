@@ -48,7 +48,7 @@ public class CrmFlujosServicio {
             switch(Objects.toString(n.tipo(),"")){
                 case "SEGMENTO"->entradas++;
                 case "TAREA","EMAIL"->{acciones++;texto(p,"asunto",160,true);texto(p,"mensaje",n.tipo().equals("EMAIL")?10000:4000,n.tipo().equals("EMAIL"));}
-                case "WHATSAPP","SMS"->{acciones++;CrmMensajeriaServicio.validar(n.tipo(),p);}
+                case "WHATSAPP"->{acciones++;CrmMensajeriaServicio.validar(n.tipo(),p);}
                 case "ESPERA"->{entero(p,"minutos",1,10080);if(vacio(n.siguiente()))throw invalido("Una espera necesita un paso siguiente");}
                 case "CONDICION"->{opcion(p,"campo","ESTADO","ETIQUETA");texto(p,"valor",120,true);}
                 default->throw invalido("Tipo de nodo no admitido");
@@ -66,8 +66,8 @@ public class CrmFlujosServicio {
     public boolean definida(long id){return jdbc.queryForObject("select exists(select 1 from public.crm_flujo where automatizacion_id=?)",Boolean.class,id);}
     public Map<String,Object> ejecutar(Map<String,Object>a){
         long id=numero(a,"id");Definicion def=leer(jdbc.queryForObject("select definicion::text from public.crm_flujo where automatizacion_id=?",String.class,id));validar(def);
-        if(def.nodos().stream().anyMatch(n->n.tipo().equals("EMAIL"))&&!correo.configurado())throw invalido("Configura SMTP y la URL HTTPS de baja antes de ejecutar este flujo");
-        for(String canal:List.of("WHATSAPP","SMS"))if(def.nodos().stream().anyMatch(n->n.tipo().equals(canal))&&!mensajeria.configurado(canal))throw invalido("Configura "+canal+" y la URL HTTPS de baja antes de ejecutar este flujo");
+        if(def.nodos().stream().anyMatch(n->n.tipo().equals("EMAIL"))&&!correo.configurado())throw invalido("Configura una clave API de Brevo válida (BREVO_API_KEY, formato xkeysib-...), CRM_SMTP_FROM verificado y CRM_PUBLIC_URL HTTPS antes de ejecutar este flujo");
+        if(def.nodos().stream().anyMatch(n->n.tipo().equals("WHATSAPP"))&&!mensajeria.configurado("WHATSAPP"))throw invalido("Configura WhatsApp Cloud y CRM_PUBLIC_URL HTTPS antes de ejecutar este flujo");
         var miembros=operaciones.miembrosInternos(numero(a,"segmento_id"),501);if(miembros.size()>500)throw invalido("Acota el segmento a 500 contactos por flujo");
         for(var c:miembros)jdbc.update("insert into public.crm_ejecucion(automatizacion_id,contacto_id,estado,definicion_flujo,paso_id) values(?,?,'PENDIENTE',?::jsonb,?) on conflict do nothing",id,c.get("id"),escribir(def),def.inicio());
         int pasos=0;
@@ -75,7 +75,7 @@ public class CrmFlujosServicio {
             long ejecucion=numero(e,"id");
             for(int i=0;i<20;i++){
                 Paso p=tx.execute(s->avanzar(ejecucion));if(p==null)break;pasos++;
-                if(p.nodo()!=null&&Set.of("EMAIL","WHATSAPP","SMS").contains(p.nodo().tipo())){
+                if(p.nodo()!=null&&Set.of("EMAIL","WHATSAPP").contains(p.nodo().tipo())){
                     try{boolean enviado=p.nodo().tipo().equals("EMAIL")?correo.enviar(p.contacto(),p.nodo().parametros().get("asunto").toString(),p.nodo().parametros().get("mensaje").toString()):mensajeria.enviar(p.ejecucion(),p.contacto(),p.nodo());tx.executeWithoutResult(s->{log(p.ejecucion(),p.nodo(),enviado?"COMPLETADO":"OMITIDO",enviado?"Aceptado por proveedor; entrega no verificada":"Sin consentimiento vigente");siguiente(p.ejecucion(),p.nodo().siguiente());});}
                     catch(Exception ex){jdbc.update("update public.crm_ejecucion set detalle='Resultado de comunicación incierto; revisar proveedor. No se reintenta automáticamente.' where id=? and estado='INCIERTO'",ejecucion);break;}
                 }
@@ -88,7 +88,7 @@ public class CrmFlujosServicio {
         var filas=jdbc.queryForList("select id,contacto_id,paso_id,definicion_flujo::text from public.crm_ejecucion where id=? and estado='PENDIENTE' and (reanudar_en is null or reanudar_en<=now()) for update skip locked",id);if(filas.isEmpty())return null;var e=filas.getFirst();long contacto=numero(e,"contacto_id");
         Definicion def=leer(e.get("definicion_flujo").toString());Nodo n=def.nodos().stream().filter(x->x.id().equals(e.get("paso_id"))).findFirst().orElseThrow();Map<String,Object>p=n.parametros()==null?Map.of():n.parametros();
         switch(n.tipo()){
-            case "WHATSAPP","SMS"->{if(!mensajeria.consentido(contacto,n.tipo())){log(id,n,"OMITIDO","Sin consentimiento del canal o teléfono internacional válido");siguiente(id,n.siguiente());return new Paso(id,contacto,null,true);}jdbc.update("update public.crm_ejecucion set estado='INCIERTO',detalle='Envío reservado; no reenviar' where id=?",id);log(id,n,"INCIERTO","Envío reservado");return new Paso(id,contacto,n,true);}
+            case "WHATSAPP"->{if(!mensajeria.consentido(contacto,n.tipo())){log(id,n,"OMITIDO","Sin consentimiento del canal o teléfono internacional válido");siguiente(id,n.siguiente());return new Paso(id,contacto,null,true);}jdbc.update("update public.crm_ejecucion set estado='INCIERTO',detalle='Envío reservado; no reenviar' where id=?",id);log(id,n,"INCIERTO","Envío reservado");return new Paso(id,contacto,n,true);}
             case "EMAIL"->{if(!correo.consentido(contacto)){log(id,n,"OMITIDO","Sin consentimiento de marketing/email");siguiente(id,n.siguiente());return new Paso(id,contacto,null,true);}jdbc.update("update public.crm_ejecucion set estado='INCIERTO',detalle='Envío de email reservado; no reenviar' where id=?",id);log(id,n,"INCIERTO","Envío reservado");return new Paso(id,contacto,n,true);}
             case "TAREA"->{
                 long activos=jdbc.queryForObject("select count(*) from public.crm_contacto c join public.usuario u on u.id_usuario=c.responsable_id where c.id=? and upper(u.estado)='ACTIVO'",Long.class,contacto);

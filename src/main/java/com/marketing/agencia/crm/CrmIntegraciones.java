@@ -22,8 +22,7 @@ public class CrmIntegraciones {
     private final CrmFlujosServicio flujos;
     private final CrmMensajeriaServicio mensajeria;
     @Value("${crm.automatizaciones.habilitadas:false}") private boolean programadas;
-    @Value("${crm.smtp.one-click:false}") private boolean oneClick;
-    public Map<String,Object> estado(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return Map.of("publicidadProveedor","Mockaroo","smtpConfigurado",correoCrm.configurado(),"automatizacionesProgramadas",programadas,"bajaPublicaConfigurada",bajas.configurada(),"oneClickConfigurado",oneClick,"whatsappConfigurado",mensajeria.configurado("WHATSAPP"),"smsConfigurado",mensajeria.configurado("SMS"));}
+    public Map<String,Object> estado(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return Map.of("publicidadProveedor","Mockaroo","emailConfigurado",correoCrm.configurado(),"automatizacionesProgramadas",programadas,"bajaPublicaConfigurada",bajas.configurada(),"whatsappConfigurado",mensajeria.configurado("WHATSAPP"));}
     public Map<String,Object> ejecutar(long id,UUID sujeto){acceso.exigir(sujeto,"automatizaciones",true);return ejecutarRegistrado(id);}
     @Scheduled(fixedDelayString="${crm.automatizaciones.intervalo-ms:60000}")
     public void programar(){if(!programadas)return;for(var f:jdbc.queryForList("select a.id from public.crm_automatizacion a join public.usuario u on u.id_usuario=a.autor_id where a.activa and upper(u.estado)='ACTIVO'")){try{ejecutarRegistrado(((Number)f.get("id")).longValue());}catch(Exception ignored){/* Cada destinatario conserva el estado de entrega; no se reenvían resultados inciertos. */}}}
@@ -35,7 +34,7 @@ public class CrmIntegraciones {
         if(!Boolean.TRUE.equals(a.get("activa")))throw invalido("Activa el flujo antes de ejecutarlo");
         if(flujos.definida(id))return flujos.ejecutar(a);
         boolean email="EMAIL".equals(a.get("accion"));
-        if(email&&!correoCrm.configurado())throw invalido("Configura SMTP, CRM_SMTP_FROM y CRM_PUBLIC_URL (HTTPS público) antes de enviar");
+        if(email&&!correoCrm.configurado())throw invalido("Configura una clave API de Brevo válida (BREVO_API_KEY, formato xkeysib-...), CRM_SMTP_FROM verificado y CRM_PUBLIC_URL HTTPS antes de enviar");
         var contactos=operaciones.miembrosInternos(numero(a,"segmento_id"),501);
         if(contactos.size()>500)throw invalido("Acota el segmento a 500 contactos por flujo");int procesados=0;
         for(var c:contactos){
