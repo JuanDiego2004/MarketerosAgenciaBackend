@@ -40,6 +40,7 @@ Spring Boot ya escucha en `0.0.0.0` y toma el puerto de `PORT`. Render usa 10000
 | `BREVO_API_KEY` | Clave API de Brevo (`xkeysib-...`); mantenerla solo en el backend |
 | `BREVO_API_URL` | `https://api.brevo.com/v3/smtp/email` para envíos transaccionales |
 | `CRM_SMTP_FROM` | Dirección remitente registrada y verificada en Brevo |
+| `CRM_EMAIL_LOGO_URL` | (Opcional) URL HTTPS pública del logo para la plantilla; por defecto `https://marketerosfrontend.onrender.com/email-logo.svg` |
 
 Después de conocer el dominio del servicio, establecer `CRM_PUBLIC_URL` con esa dirección y volver a desplegar/aplicar las variables. Actualizar cualquier valor anterior que apuntara a Railway o localhost.
 
