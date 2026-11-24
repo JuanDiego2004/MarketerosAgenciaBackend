@@ -26,6 +26,8 @@ Spring Boot ya escucha en `0.0.0.0` y toma el puerto de `PORT`. Render usa 10000
 
 ## Variables
 
+Para ejecutar el backend localmente también se necesitan `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` en el archivo `.env` de este backend (o en el entorno de ejecución del IDE). Las variables de Render no se copian al equipo. `DB_PASSWORD` es la contraseña de PostgreSQL del mismo proyecto; la clave publicable de Supabase no la reemplaza. El mensaje SCRAM «no password was provided» indica que falta esa configuración. Después de añadirla, reiniciar el backend. No versionar `.env` ni compartir su contraseña.
+
 | Variable | Valor esperado |
 | --- | --- |
 | `DB_URL` | URL JDBC de la base PostgreSQL existente, por ejemplo `jdbc:postgresql://HOST:6543/postgres?sslmode=require` |
