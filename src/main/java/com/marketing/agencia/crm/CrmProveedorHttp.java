@@ -30,19 +30,21 @@ public class CrmProveedorHttp {
         }catch(com.marketing.agencia.config.ExcepcionApi e){throw e;}catch(InterruptedException e){Thread.currentThread().interrupt();throw invalido("Operación interrumpida; revisa el resultado en el proveedor antes de repetirla");}catch(Exception e){throw invalido("No se pudo confirmar la respuesta del proveedor");}
     }
     private ExcepcionApi rechazo(URI destino,int status,String cuerpo){
-        if(!"graph.facebook.com".equals(destino.getHost()))return invalido("El proveedor rechazó la operación (HTTP "+status+"). Revisa la configuración del proveedor.");
+        boolean meta="graph.facebook.com".equals(destino.getHost()),brevo="api.brevo.com".equals(destino.getHost());
+        if(!meta&&!brevo)return invalido("El proveedor rechazó la operación (HTTP "+status+"). Revisa la configuración del proveedor.");
         String codigo="";String mensaje="";
         try{
-            JsonNode error=json.readTree(cuerpo).path("error");
+            JsonNode raiz=json.readTree(cuerpo);JsonNode error=meta?raiz.path("error"):raiz;
             JsonNode valorCodigo=error.path("code");
             if(valorCodigo.isNumber()||valorCodigo.isTextual()){
-                String candidato=valorCodigo.asText();if(candidato.matches("[0-9]{1,12}"))codigo=candidato;
+                String candidato=valorCodigo.asText();if(candidato.matches(meta?"[0-9]{1,12}":"[A-Za-z0-9_.-]{1,80}"))codigo=candidato;
             }
             JsonNode valorMensaje=error.path("message");if(valorMensaje.isTextual())mensaje=valorMensaje.asText();
         }catch(Exception ignored){/* No se expone el cuerpo sin formato del proveedor. */}
-        mensaje=mensaje.replaceAll("[\\p{Cntrl}]"," ").replaceAll("(?i)(access[_ ]?token|authorization|bearer)\\s*[:=]?\\s*[^\\s,;]+","[credencial ocultada]").trim();
+        mensaje=mensaje.replaceAll("[\\p{Cntrl}]"," ").replaceAll("(?i)(access[_ ]?token|authorization|bearer|xkeysib-)\\s*[:=]?\\s*[^\\s,;]+","[credencial ocultada]").replaceAll("[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}","[correo ocultado]").trim();
         if(mensaje.length()>240)mensaje=mensaje.substring(0,240)+"…";
-        String detalle="Meta rechazó el mensaje (HTTP "+status+(codigo.isBlank()?"":", código "+codigo)+")"+(mensaje.isBlank()?".":": "+mensaje);
+        String proveedor=meta?"Meta rechazó el mensaje":"Brevo rechazó el correo";
+        String detalle=proveedor+" (HTTP "+status+(codigo.isBlank()?"":", código "+codigo)+")"+(mensaje.isBlank()?".":": "+mensaje);
         return invalido(detalle);
     }
     static String form(Map<?,?>d){return d.entrySet().stream().map(e->URLEncoder.encode(e.getKey().toString(),StandardCharsets.UTF_8)+"="+URLEncoder.encode(e.getValue().toString(),StandardCharsets.UTF_8)).collect(java.util.stream.Collectors.joining("&"));}

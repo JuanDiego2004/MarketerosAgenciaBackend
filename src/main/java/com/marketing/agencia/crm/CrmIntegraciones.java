@@ -48,9 +48,11 @@ public class CrmIntegraciones {
         var elegibles=candidatos.stream().filter(c->correoCrm.consentido(numero(c,"id"))).toList();
         if(elegibles.size()>500)throw invalido("El envío admite hasta 500 contactos con consentimiento. Acota la empresa o el segmento.");
         int enviados=0,omitidos=candidatos.size()-elegibles.size(),errores=0;
-        for(var c:elegibles){long contacto=numero(c,"id");try{if(correoCrm.enviar(contacto,asunto,mensaje))enviados++;else omitidos++;}catch(Exception e){errores++;}}
+        Map<String,Integer> fallos=new LinkedHashMap<>();
+        for(var c:elegibles){long contacto=numero(c,"id");try{if(correoCrm.enviar(contacto,asunto,mensaje))enviados++;else omitidos++;}catch(Exception e){errores++;String detalle=e instanceof com.marketing.agencia.config.ExcepcionApi api?api.getMessage():"No se pudo confirmar el envío con Brevo.";if(detalle==null||detalle.isBlank())detalle="No se pudo confirmar el envío con Brevo.";fallos.merge(detalle,1,Integer::sum);}}
         jdbc.update("insert into public.crm_auditoria(recurso,registro_id,accion,autor_id) values('integraciones',0,?,?)","ENVIO_EMAIL_"+tipo+"_OK"+enviados+"_OM"+omitidos+"_ER"+errores,autor);
-        return Map.of("destinatarios",candidatos.size(),"enviados",enviados,"omitidos",omitidos,"errores",errores);
+        List<Map<String,Object>> detalles=fallos.entrySet().stream().map(e->Map.<String,Object>of("mensaje",e.getKey(),"cantidad",e.getValue())).toList();
+        return Map.of("destinatarios",candidatos.size(),"enviados",enviados,"omitidos",omitidos,"errores",errores,"detallesError",detalles);
     }
     public List<Map<String,Object>> historialEmail(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return jdbc.queryForList("select a.accion,a.created_at,u.nombres responsable from public.crm_auditoria a join public.usuario u on u.id_usuario=a.autor_id where a.recurso='integraciones' and a.accion like 'ENVIO_EMAIL_%' order by a.id desc limit 100");}
     public Map<String,Object> enviarWhatsApp(Map<String,Object> d,UUID sujeto){
