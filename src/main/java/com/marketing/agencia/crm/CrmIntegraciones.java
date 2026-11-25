@@ -27,6 +27,10 @@ public class CrmIntegraciones {
         "contactos",jdbc.queryForList("select c.id,c.nombre,c.cuenta_id,cu.nombre empresa from public.crm_contacto c left join public.crm_cuenta cu on cu.id=c.cuenta_id where c.correo is not null and btrim(c.correo)<>'' order by c.nombre limit 1000"),
         "empresas",jdbc.queryForList("select id,nombre from public.crm_cuenta where fusionada_en is null order by nombre limit 1000"),
         "segmentos",jdbc.queryForList("select id,nombre from public.crm_segmento order by nombre limit 1000"));}
+    public Map<String,Object> destinatariosWhatsapp(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return Map.of(
+        "contactos",jdbc.queryForList("select c.id,c.nombre,c.cuenta_id,cu.nombre empresa from public.crm_contacto c left join public.crm_cuenta cu on cu.id=c.cuenta_id where c.telefono is not null and btrim(c.telefono)<>'' order by c.nombre limit 1000"),
+        "empresas",jdbc.queryForList("select id,nombre from public.crm_cuenta where fusionada_en is null order by nombre limit 1000"),
+        "segmentos",jdbc.queryForList("select id,nombre from public.crm_segmento order by nombre limit 1000"));}
     public Map<String,Object> enviarEmail(Map<String,Object> d,UUID sujeto){
         long autor=acceso.exigir(sujeto,"integraciones",true);
         String tipo=textoEmail(d,"tipoDestinatario",20).toUpperCase(Locale.ROOT),asunto=textoEmail(d,"asunto",160),mensaje=textoEmail(d,"mensaje",10000);
@@ -49,6 +53,32 @@ public class CrmIntegraciones {
         return Map.of("destinatarios",candidatos.size(),"enviados",enviados,"omitidos",omitidos,"errores",errores);
     }
     public List<Map<String,Object>> historialEmail(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return jdbc.queryForList("select a.accion,a.created_at,u.nombres responsable from public.crm_auditoria a join public.usuario u on u.id_usuario=a.autor_id where a.recurso='integraciones' and a.accion like 'ENVIO_EMAIL_%' order by a.id desc limit 100");}
+    public Map<String,Object> enviarWhatsApp(Map<String,Object> d,UUID sujeto){
+        long autor=acceso.exigir(sujeto,"integraciones",true);
+        String tipo=textoEmail(d,"tipoDestinatario",20).toUpperCase(Locale.ROOT);
+        String plantilla=textoEmail(d,"plantilla",100),idioma=textoEmail(d,"idioma",20);
+        Object valorParametros=d.get("parametros");if(valorParametros!=null&&!(valorParametros instanceof String))throw invalido("Revisa los parámetros de la plantilla");
+        String parametros=Objects.toString(valorParametros,"");
+        if(!Set.of("CONTACTO","EMPRESA","SEGMENTO","GENERAL").contains(tipo))throw invalido("Elige contacto, empresa, segmento o todos los contactos con consentimiento");
+        Map<String,Object> p=Map.of("plantilla",plantilla,"idioma",idioma,"parametros",parametros);
+        CrmMensajeriaServicio.validar("WHATSAPP",p);
+        if(!mensajeria.configurado("WHATSAPP"))throw invalido("Configura WhatsApp Cloud y la URL HTTPS pública antes de enviar");
+        List<Map<String,Object>> candidatos=switch(tipo){
+            case "CONTACTO"->{long id=numero(d,"contactoId");yield jdbc.queryForList("select * from public.crm_contacto where id=?",id);}
+            case "EMPRESA"->{long id=numero(d,"empresaId");yield jdbc.queryForList("select * from public.crm_contacto where cuenta_id=? and telefono is not null and btrim(telefono)<>'' order by id limit 10001",id);}
+            case "SEGMENTO"->{var ms=operaciones.miembrosInternos(numero(d,"segmentoId"),10001);yield ms;}
+            default -> jdbc.queryForList("select * from public.crm_contacto where telefono is not null and btrim(telefono)<>'' order by id limit 10001");
+        };
+        if(candidatos.size()>10000)throw invalido("El grupo supera 10000 contactos. Acota la empresa o el segmento.");
+        if(candidatos.isEmpty())throw invalido("No se encontraron contactos para este destinatario.");
+        var elegibles=candidatos.stream().filter(c->mensajeria.consentido(numero(c,"id"),"WHATSAPP")).toList();
+        if(elegibles.size()>100)throw invalido("El envío directo admite hasta 100 contactos con consentimiento. Acota la empresa o el segmento.");
+        int enviados=0,omitidos=candidatos.size()-elegibles.size(),errores=0;
+        for(var c:elegibles){try{if(mensajeria.enviarDirecto(numero(c,"id"),p)!=null)enviados++;else omitidos++;}catch(Exception e){errores++;}}
+        jdbc.update("insert into public.crm_auditoria(recurso,registro_id,accion,autor_id) values('integraciones',0,?,?)","ENVIO_WHATSAPP_"+tipo+"_OK"+enviados+"_OM"+omitidos+"_ER"+errores,autor);
+        return Map.of("destinatarios",candidatos.size(),"aceptadosMeta",enviados,"omitidos",omitidos,"errores",errores);
+    }
+    public List<Map<String,Object>> historialWhatsapp(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return jdbc.queryForList("select a.accion,a.created_at,u.nombres responsable from public.crm_auditoria a join public.usuario u on u.id_usuario=a.autor_id where a.recurso='integraciones' and a.accion like 'ENVIO_WHATSAPP_%' order by a.id desc limit 100");}
     private String textoEmail(Map<String,Object> d,String campo,int max){Object v=d.get(campo);if(!(v instanceof String s)||s.length()>max)throw invalido("Revisa el campo "+campo);return s.trim();}
     public Map<String,Object> ejecutar(long id,UUID sujeto){acceso.exigir(sujeto,"automatizaciones",true);return ejecutarRegistrado(id);}
     @Scheduled(fixedDelayString="${crm.automatizaciones.intervalo-ms:60000}")

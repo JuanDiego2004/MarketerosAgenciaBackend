@@ -32,8 +32,11 @@ public class CrmOperacionControlador {
     @GetMapping("/segmentos/{id}/csv") public ResponseEntity<byte[]> csv(@PathVariable long id,@AuthenticationPrincipal Jwt j){return ResponseEntity.ok().contentType(new MediaType("text","csv",java.nio.charset.StandardCharsets.UTF_8)).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=segmento.csv").body(servicio.exportarSegmento(id,sujeto(j)));}
     @GetMapping("/integraciones/estado") public Object estado(@AuthenticationPrincipal Jwt j){return ok(integraciones.estado(sujeto(j)));}
     @GetMapping("/integraciones/destinatarios-email") public Object destinatariosEmail(@AuthenticationPrincipal Jwt j){return ok(integraciones.destinatariosEmail(sujeto(j)));}
+    @GetMapping("/integraciones/destinatarios-whatsapp") public Object destinatariosWhatsapp(@AuthenticationPrincipal Jwt j){return ok(integraciones.destinatariosWhatsapp(sujeto(j)));}
     @GetMapping("/integraciones/email/historial") public Object historialEmail(@AuthenticationPrincipal Jwt j){return ok(integraciones.historialEmail(sujeto(j)));}
     @PostMapping("/integraciones/email/enviar") public Object enviarEmail(@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j){return ok(integraciones.enviarEmail(d,sujeto(j)));}
+    @GetMapping("/integraciones/whatsapp/historial") public Object historialWhatsapp(@AuthenticationPrincipal Jwt j){return ok(integraciones.historialWhatsapp(sujeto(j)));}
+    @PostMapping("/integraciones/whatsapp/enviar") public Object enviarWhatsapp(@RequestBody Map<String,Object>d,@AuthenticationPrincipal Jwt j){return ok(integraciones.enviarWhatsApp(d,sujeto(j)));}
     @PostMapping("/automatizaciones/{id}/ejecutar") public Object ejecutar(@PathVariable long id,@AuthenticationPrincipal Jwt j){return ok(integraciones.ejecutar(id,sujeto(j)));}
     @GetMapping("/automatizaciones/{id}/ejecuciones") public Object ejecuciones(@PathVariable long id,@AuthenticationPrincipal Jwt j){return ok(integraciones.ejecuciones(id,sujeto(j)));}
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class) public ResponseEntity<?> conflicto(){return ResponseEntity.status(409).body(ApiRespuesta.error("Registro duplicado, relacionado con otros registros o con datos inválidos","CRM_CONFLICTO"));}
