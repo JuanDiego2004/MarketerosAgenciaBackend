@@ -74,9 +74,11 @@ public class CrmIntegraciones {
         var elegibles=candidatos.stream().filter(c->mensajeria.consentido(numero(c,"id"),"WHATSAPP")).toList();
         if(elegibles.size()>100)throw invalido("El envío directo admite hasta 100 contactos con consentimiento. Acota la empresa o el segmento.");
         int enviados=0,omitidos=candidatos.size()-elegibles.size(),errores=0;
-        for(var c:elegibles){try{if(mensajeria.enviarDirecto(numero(c,"id"),p)!=null)enviados++;else omitidos++;}catch(Exception e){errores++;}}
+        Map<String,Integer> fallos=new LinkedHashMap<>();
+        for(var c:elegibles){try{if(mensajeria.enviarDirecto(numero(c,"id"),p)!=null)enviados++;else omitidos++;}catch(Exception e){errores++;String detalle=e instanceof com.marketing.agencia.config.ExcepcionApi api?api.getMessage():"No se pudo confirmar el envío con el proveedor.";if(detalle==null||detalle.isBlank())detalle="No se pudo confirmar el envío con el proveedor.";fallos.merge(detalle,1,Integer::sum);}}
         jdbc.update("insert into public.crm_auditoria(recurso,registro_id,accion,autor_id) values('integraciones',0,?,?)","ENVIO_WHATSAPP_"+tipo+"_OK"+enviados+"_OM"+omitidos+"_ER"+errores,autor);
-        return Map.of("destinatarios",candidatos.size(),"aceptadosMeta",enviados,"omitidos",omitidos,"errores",errores);
+        List<Map<String,Object>> detalles=fallos.entrySet().stream().map(e->Map.<String,Object>of("mensaje",e.getKey(),"cantidad",e.getValue())).toList();
+        return Map.of("destinatarios",candidatos.size(),"aceptadosMeta",enviados,"omitidos",omitidos,"errores",errores,"detallesError",detalles);
     }
     public List<Map<String,Object>> historialWhatsapp(UUID sujeto){acceso.exigir(sujeto,"integraciones",false);return jdbc.queryForList("select a.accion,a.created_at,u.nombres responsable from public.crm_auditoria a join public.usuario u on u.id_usuario=a.autor_id where a.recurso='integraciones' and a.accion like 'ENVIO_WHATSAPP_%' order by a.id desc limit 100");}
     private String textoEmail(Map<String,Object> d,String campo,int max){Object v=d.get(campo);if(!(v instanceof String s)||s.length()>max)throw invalido("Revisa el campo "+campo);return s.trim();}

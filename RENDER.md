@@ -35,7 +35,7 @@ Para ejecutar el backend localmente también se necesitan `DB_URL`, `DB_USERNAME
 | `DB_PASSWORD` | Contraseña de la base |
 | `SUPABASE_URL` | URL del mismo proyecto de autenticación que utiliza el frontend |
 | `SUPABASE_PUBLISHABLE_KEY` | Clave pública/publicable del proyecto que requiere el backend; no usar la contraseña de la base |
-| `APP_CORS_ALLOWED_ORIGINS` | `https://marketerosfrontend.onrender.com`; para desarrollo añadir `,http://localhost:5173,http://localhost:3000`. Sin rutas ni barra final |
+| `APP_CORS_ALLOWED_ORIGINS` | `https://marketerosfrontend.onrender.com,http://localhost:5173,http://localhost:3000`. Sin rutas ni barra final |
 | `PORT` | Render lo define; el Blueprint utiliza 10000 |
 | `CRM_PUBLIC_URL` | Dominio HTTPS real del nuevo servicio de Render, sin `/api` al final |
 | `CRM_AUTOMATIZACIONES_HABILITADAS` | Mantener `false` durante configuración y pruebas |
@@ -56,7 +56,7 @@ La base de datos debe tener aplicadas las migraciones correspondientes. No se ej
 
 En local, Spring Boot carga las variables del archivo `.env` situado junto al `pom.xml`. En Render, agrega los secretos en **Environment** del servicio y vuelve a desplegar; no se leen archivos `.env` locales en Render.
 
-Para el frontend ya publicado, establecer `APP_CORS_ALLOWED_ORIGINS=https://marketerosfrontend.onrender.com` en Environment del backend y guardar/desplegar. Si existe una variable anterior, actualizarla: los valores del entorno prevalecen sobre los predeterminados del código. Las seis pruebas `CorsRenderTests` cubren preflight de login/CRM, peticiones públicas, localhost, rechazo de otros dominios y autenticación conservada.
+En **Environment** del backend en Render, establecer `APP_CORS_ALLOWED_ORIGINS=https://marketerosfrontend.onrender.com,http://localhost:5173,http://localhost:3000` y guardar/desplegar. Esto permite el frontend publicado y el desarrollo local. Si existe una variable anterior, reemplazarla completa: los valores del entorno prevalecen sobre los predeterminados del código. Los orígenes deben coincidir con el protocolo, host y puerto del navegador; no añadas rutas ni barra final. Las pruebas `CorsRenderTests` cubren preflight de login/CRM, peticiones públicas, localhost, rechazo de otros dominios y autenticación conservada.
 
 El frontend utiliza `VITE_API_URL=https://marketerosagenciabackend.onrender.com`. Su Static Site requiere una regla Rewrite de `/*` a `/index.html` para poder recargar rutas como `/login` y `/contratos`; se preparó también `MarketingSystem/render.yaml`.
 
