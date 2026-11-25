@@ -33,6 +33,10 @@ DECLARE
  paises text[]:=ARRAY['PE','CO','MX','ES','US','BR','JP','ZA','AU','PE'];
  canales text[]:=ARRAY['Facebook','Instagram','TikTok','YouTube','Búsqueda','Email','Display','LinkedIn','Contenido web','Podcast'];
 BEGIN
+ IF EXISTS(SELECT 1 FROM public.crm_empresa_migracion m WHERE m.tipo='lote_marketing_20261124' AND m.registro_id=0) THEN
+  INSERT INTO demo_ids SELECT r.* FROM public.crm_empresa_migracion m CROSS JOIN LATERAL jsonb_to_recordset(m.datos->'registros') r(modulo text,lote int,id bigint) WHERE m.tipo='lote_marketing_20261124' AND m.registro_id=0;
+  RETURN;
+ END IF;
  IF to_regclass('pg_temp.demo_estadisticas') IS NULL THEN RAISE EXCEPTION 'Carga primero las estadísticas generadas por Mockaroo'; END IF;
  IF (SELECT count(*) FROM demo_estadisticas)<>900 THEN RAISE EXCEPTION 'Se requieren las 900 filas completas de Mockaroo'; END IF;
  SELECT min(u.id_usuario) INTO autor FROM public.usuario u JOIN public.rol r USING(id_rol)
@@ -194,27 +198,27 @@ INSERT INTO public.reporte(tipo_reporte,fecha_desde,fecha_hasta,formato_exportac
 
 INSERT INTO demo_resumen SELECT modulo,count(*) FROM demo_ids GROUP BY modulo;
 INSERT INTO demo_resumen VALUES
- ('Usuarios de prueba (equipo + clientes)',(SELECT count(*) FROM public.usuario WHERE correo LIKE 'demo10.%@example.invalid')),
+ ('Usuarios de prueba (equipo + clientes)',(SELECT count(*) FROM public.usuario u JOIN demo_ids d ON d.id=u.id_usuario AND d.modulo IN('Trabajadores de prueba','Perfiles de cliente de prueba'))),
  ('Métricas diarias / dashboard',(SELECT count(*) FROM public.metrica_operativa m JOIN demo_ids d ON d.id=m.id_campana AND d.modulo='Campañas')),
  ('Estadísticas por anuncio y país',(SELECT count(*) FROM public.crm_anuncio_metrica m JOIN demo_ids d ON d.id=m.anuncio_id AND d.modulo='Anuncios / calendario editorial')),
  ('Estadísticas publicitarias DEMO por país',(SELECT count(*) FROM public.crm_publicidad_demo_metrica m JOIN demo_ids d ON d.id=m.demo_id AND d.modulo='Rendimiento publicitario DEMO')),
  ('Resultados geográficos del mapa',(SELECT count(*) FROM public.marketing_resultado_geografico g JOIN public.metrica_operativa m ON m.id_metrica=g.metrica_id JOIN demo_ids d ON d.id=m.id_campana AND d.modulo='Campañas')),
  ('Indicadores / análisis comparativo',(SELECT count(*) FROM public.indicador_kpi k JOIN demo_ids d ON d.id=k.id_campana AND d.modulo='Campañas')),
  ('Reportes por campaña',(SELECT count(*) FROM public.reporte r JOIN demo_ids d ON d.id=r.id_campana AND d.modulo='Campañas')),
- ('Atribución de contactos',(SELECT count(*) FROM public.crm_origen WHERE utm_source='demo10')),
- ('Gastos adicionales simulados',(SELECT count(*) FROM public.crm_inversion WHERE concepto LIKE 'DEMO10 · %'));
+ ('Atribución de contactos',(SELECT count(*) FROM public.crm_origen o JOIN demo_ids d ON d.id=o.contacto_id AND d.modulo='Contactos / Leads')),
+ ('Gastos adicionales simulados',(SELECT count(*) FROM public.crm_inversion v JOIN demo_ids d ON d.id=v.campana_id AND d.modulo='Campañas'));
 
 DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM demo_resumen WHERE modulo NOT IN ('Usuarios de prueba (equipo + clientes)','Métricas diarias / dashboard','Estadísticas por anuncio y país','Estadísticas publicitarias DEMO por país','Resultados geográficos del mapa') AND registros<>10) THEN
   RAISE EXCEPTION 'El resumen no contiene los 10 registros esperados por módulo';
  END IF;
- IF EXISTS(SELECT 1 FROM public.usuario WHERE correo LIKE 'demo10.%@example.invalid' AND (id_supabase IS NOT NULL OR password_hash IS NOT NULL OR estado<>'INACTIVO')) THEN
+ IF EXISTS(SELECT 1 FROM public.usuario u JOIN demo_ids d ON d.id=u.id_usuario AND d.modulo IN('Trabajadores de prueba','Perfiles de cliente de prueba') WHERE u.id_supabase IS NOT NULL OR u.password_hash IS NOT NULL OR u.estado<>'INACTIVO') THEN
   RAISE EXCEPTION 'Se detectó un perfil DEMO con acceso de autenticación; se revierte toda la carga';
  END IF;
- IF EXISTS(SELECT 1 FROM public.crm_portal_acceso p JOIN public.usuario u ON u.id_usuario=p.usuario_id WHERE u.correo LIKE 'demo10.%@example.invalid' AND p.activo) THEN
+ IF EXISTS(SELECT 1 FROM public.crm_portal_acceso p JOIN demo_ids d ON d.id=p.usuario_id AND d.modulo='Accesos al portal desactivados' WHERE p.activo) THEN
   RAISE EXCEPTION 'Los accesos de ejemplo deben permanecer desactivados';
  END IF;
- IF EXISTS(SELECT 1 FROM public.crm_automatizacion WHERE nombre LIKE 'DEMO10 · %' AND activa) THEN
+ IF EXISTS(SELECT 1 FROM public.crm_automatizacion a JOIN demo_ids d ON d.id=a.id AND d.modulo='Automatizaciones inactivas' WHERE a.activa) THEN
   RAISE EXCEPTION 'Las automatizaciones DEMO deben permanecer inactivas';
  END IF;
  IF EXISTS(SELECT 1 FROM public.metrica_operativa m JOIN demo_ids d ON d.id=m.id_campana AND d.modulo='Campañas'

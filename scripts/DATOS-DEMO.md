@@ -1,6 +1,6 @@
 # Carga de demostración: 10 registros por módulo operativo
 
-Lote identificado por `DEMO10`, con fecha de referencia 24/11/2026. Los correos terminan en `example.invalid`; no representan personas, empresas, cuentas publicitarias o contrataciones reales.
+Lote con fecha de referencia 24/11/2026. Sus nombres y descripciones se presentan de forma natural, sin prefijos de prueba. Los correos y sitios web usan dominios reservados bajo `example.invalid`; no representan buzones de personas ni empresas reales. La procedencia sintética y los IDs del lote se conservan en el inventario interno existente `crm_empresa_migracion`, bajo `lote_marketing_20261124`, sin crear tablas adicionales.
 
 | Módulos o datos | Registros del lote |
 | --- | ---: |
@@ -35,13 +35,15 @@ Desde el directorio del backend, usando Java y el driver PostgreSQL disponibles 
 java -cp '<ruta/postgresql.jar>' scripts/PoblarDemo.java --comprobar
 java -cp '<ruta/postgresql.jar>' scripts/PoblarDemo.java --aplicar
 java -cp '<ruta/postgresql.jar>' scripts/PoblarDemo.java --verificar
+java -cp '<ruta/postgresql.jar>' scripts/PoblarDemo.java --normalizar --comprobar
+java -cp '<ruta/postgresql.jar>' scripts/PoblarDemo.java --normalizar --aplicar
 ```
 
-La configuración se lee del entorno y de `.env` sin imprimir credenciales. `--comprobar` ejecuta la carga y la revierte; `--aplicar` confirma solo si pasan las restricciones y la validación de totales; `--verificar` consulta desde una conexión de solo lectura. La carga del mismo lote puede repetirse sin duplicar registros ni sobrescribir datos previos. Como es habitual en PostgreSQL, una transacción revertida puede consumir valores de las secuencias.
+La configuración se lee del entorno y de `.env` sin imprimir credenciales. `--comprobar` ejecuta la carga y la revierte; `--aplicar` confirma solo si pasan las restricciones y la validación de totales; `--verificar` consulta desde una conexión de solo lectura. `--normalizar` modifica únicamente la presentación de los registros ya existentes, conservando IDs, relaciones, importes, estados y métricas; requiere `--comprobar` o `--aplicar`. También se aplica automáticamente al finalizar una carga nueva. El inventario interno permite repetir la carga sin duplicar registros aunque sus nombres y códigos hayan cambiado. Como es habitual en PostgreSQL, una transacción revertida puede consumir valores de las secuencias.
 
 Para preparar un nuevo archivo sintético existe `node scripts/generar-metricas-demo.mjs`; no hace falta volver a llamar a Mockaroo para repetir el lote ya descargado. No se debe reemplazar el archivo de un lote ya aplicado: debe prepararse otro identificador de lote para otra demostración.
 
-La aplicación manual en SQL requiere una sola transacción: comenzar con `BEGIN;`, ejecutar la migración geográfica existente si falta, después `metricas-demo-mockaroo.sql`, después `poblar-demo-10.sql` y finalmente `COMMIT;`. Ante un error, usar `ROLLBACK;`. El ejecutor Java coordina estos pasos automáticamente.
+La aplicación manual en SQL requiere una sola transacción: comenzar con `BEGIN;`, ejecutar la migración geográfica existente si falta, después `metricas-demo-mockaroo.sql`, después `poblar-demo-10.sql`, después `normalizar-registros-marketing.sql` y finalmente `COMMIT;`. Para cambiar únicamente la presentación del lote existente se ejecuta solo `normalizar-registros-marketing.sql` entre `BEGIN;` y `COMMIT;`. Ante un error, usar `ROLLBACK;`. El ejecutor Java coordina estos pasos automáticamente.
 
 Prueba aislada, sin conexiones externas:
 

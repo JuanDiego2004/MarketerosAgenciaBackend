@@ -1,34 +1,37 @@
--- Solo lectura: permite verificar desde otra conexión lo que quedó guardado.
-WITH campanas AS (SELECT id_campana FROM public.campana WHERE nombre LIKE 'DEMO10 · %'),
- anuncios AS (SELECT id FROM public.crm_anuncio WHERE codigo LIKE 'DEMO10-AD-%')
-SELECT 'Empresas' modulo,count(*) registros FROM public.cliente WHERE correo LIKE 'demo10.empresa.%@example.invalid'
-UNION ALL SELECT 'Campañas',count(*) FROM campanas
-UNION ALL SELECT 'Contratos',count(*) FROM public.crm_acuerdo WHERE nombre LIKE 'DEMO10 · %' AND tipo='CONTRATO'
-UNION ALL SELECT 'Cotizaciones',count(*) FROM public.crm_acuerdo WHERE nombre LIKE 'DEMO10 · %' AND tipo='COTIZACION'
-UNION ALL SELECT 'Contactos',count(*) FROM public.crm_contacto WHERE correo LIKE 'demo10.contacto.%@example.invalid'
-UNION ALL SELECT 'Pipeline',count(*) FROM public.crm_oportunidad WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Actividades',count(*) FROM public.crm_actividad WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Audiencias',count(*) FROM public.segmento_audiencia WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Canales de difusión',count(*) FROM public.canal_difusion WHERE nombre_canal LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Cuentas publicitarias',count(*) FROM public.crm_cuenta_publicitaria WHERE codigo LIKE 'DEMO10-CTA-%'
-UNION ALL SELECT 'Anuncios / calendario',count(*) FROM anuncios
-UNION ALL SELECT 'Contenido',count(*) FROM public.crm_contenido WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Entregables',count(*) FROM public.crm_trabajo_servicio WHERE nombre LIKE 'DEMO10 · %' AND tipo='ENTREGABLE'
-UNION ALL SELECT 'Recomendaciones',count(*) FROM public.crm_trabajo_servicio WHERE nombre LIKE 'DEMO10 · %' AND tipo='RECOMENDACION'
-UNION ALL SELECT 'Ajustes',count(*) FROM public.crm_trabajo_servicio WHERE nombre LIKE 'DEMO10 · %' AND tipo='AJUSTE'
-UNION ALL SELECT 'Informes por contrato',count(*) FROM public.crm_trabajo_servicio WHERE nombre LIKE 'DEMO10 · %' AND tipo='INFORME'
-UNION ALL SELECT 'Metas',count(*) FROM public.crm_meta WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Campos personalizados',count(*) FROM public.crm_campo WHERE codigo LIKE 'demo10_campo_%'
-UNION ALL SELECT 'Segmentos dinámicos',count(*) FROM public.crm_segmento WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Reglas de puntuación',count(*) FROM public.crm_regla_score WHERE nombre LIKE 'DEMO10 · %'
-UNION ALL SELECT 'Automatizaciones inactivas',count(*) FROM public.crm_automatizacion WHERE nombre LIKE 'DEMO10 · %' AND NOT activa
-UNION ALL SELECT 'Trabajadores de prueba',count(*) FROM public.usuario WHERE correo LIKE 'demo10.equipo.%@example.invalid'
-UNION ALL SELECT 'Perfiles de cliente de prueba',count(*) FROM public.usuario WHERE correo LIKE 'demo10.portal.%@example.invalid'
-UNION ALL SELECT 'Accesos al portal desactivados',count(*) FROM public.crm_portal_acceso p JOIN public.usuario u ON u.id_usuario=p.usuario_id WHERE u.correo LIKE 'demo10.portal.%@example.invalid' AND NOT p.activo
-UNION ALL SELECT 'Reportes',count(*) FROM public.reporte WHERE id_campana IN(SELECT * FROM campanas)
-UNION ALL SELECT 'Indicadores',count(*) FROM public.indicador_kpi WHERE id_campana IN(SELECT * FROM campanas)
-UNION ALL SELECT 'Métricas diarias',count(*) FROM public.metrica_operativa WHERE id_campana IN(SELECT * FROM campanas)
-UNION ALL SELECT 'Estadísticas de anuncios',count(*) FROM public.crm_anuncio_metrica WHERE anuncio_id IN(SELECT * FROM anuncios)
-UNION ALL SELECT 'Resultados del mapa',count(*) FROM public.marketing_resultado_geografico g JOIN public.metrica_operativa m ON m.id_metrica=g.metrica_id WHERE m.id_campana IN(SELECT * FROM campanas)
-UNION ALL SELECT 'Países con resultados',count(DISTINCT pais) FROM public.crm_anuncio_metrica WHERE anuncio_id IN(SELECT * FROM anuncios)
+-- Solo lectura: verifica las filas actuales por sus IDs, independientemente del nombre visible.
+WITH lote AS (SELECT r.* FROM public.crm_empresa_migracion m CROSS JOIN LATERAL jsonb_to_recordset(m.datos->'registros') r(modulo text,lote int,id bigint) WHERE m.tipo='lote_marketing_20261124' AND m.registro_id=0)
+SELECT 'Empresas' modulo,count(*) registros FROM public.crm_cuenta t JOIN lote l ON l.id=t.id AND l.modulo='Empresas'
+UNION ALL SELECT 'Trabajadores de prueba' modulo,count(*) registros FROM public.usuario t JOIN lote l ON l.id=t.id_usuario AND l.modulo='Trabajadores de prueba'
+UNION ALL SELECT 'Perfiles de cliente de prueba' modulo,count(*) registros FROM public.usuario t JOIN lote l ON l.id=t.id_usuario AND l.modulo='Perfiles de cliente de prueba'
+UNION ALL SELECT 'Accesos al portal desactivados' modulo,count(*) registros FROM public.crm_portal_acceso t JOIN lote l ON l.id=t.usuario_id AND l.modulo='Accesos al portal desactivados'
+UNION ALL SELECT 'Campañas' modulo,count(*) registros FROM public.campana t JOIN lote l ON l.id=t.id_campana AND l.modulo='Campañas'
+UNION ALL SELECT 'Canales de difusión' modulo,count(*) registros FROM public.canal_difusion t JOIN lote l ON l.id=t.id_canal AND l.modulo='Canales de difusión'
+UNION ALL SELECT 'Audiencias' modulo,count(*) registros FROM public.segmento_audiencia t JOIN lote l ON l.id=t.id_segmento AND l.modulo='Audiencias'
+UNION ALL SELECT 'Contratos' modulo,count(*) registros FROM public.crm_acuerdo t JOIN lote l ON l.id=t.id AND l.modulo='Contratos'
+UNION ALL SELECT 'Cotizaciones' modulo,count(*) registros FROM public.crm_acuerdo t JOIN lote l ON l.id=t.id AND l.modulo='Cotizaciones'
+UNION ALL SELECT 'Cuentas publicitarias simuladas' modulo,count(*) registros FROM public.crm_cuenta_publicitaria t JOIN lote l ON l.id=t.id AND l.modulo='Cuentas publicitarias simuladas'
+UNION ALL SELECT 'Contactos / Leads' modulo,count(*) registros FROM public.crm_contacto t JOIN lote l ON l.id=t.id AND l.modulo='Contactos / Leads'
+UNION ALL SELECT 'Pipeline' modulo,count(*) registros FROM public.crm_oportunidad t JOIN lote l ON l.id=t.id AND l.modulo='Pipeline'
+UNION ALL SELECT 'Actividades' modulo,count(*) registros FROM public.crm_actividad t JOIN lote l ON l.id=t.id AND l.modulo='Actividades'
+UNION ALL SELECT 'Segmentos dinámicos' modulo,count(*) registros FROM public.crm_segmento t JOIN lote l ON l.id=t.id AND l.modulo='Segmentos dinámicos'
+UNION ALL SELECT 'Reglas de puntuación' modulo,count(*) registros FROM public.crm_regla_score t JOIN lote l ON l.id=t.id AND l.modulo='Reglas de puntuación'
+UNION ALL SELECT 'Metas y alertas' modulo,count(*) registros FROM public.crm_meta t JOIN lote l ON l.id=t.id AND l.modulo='Metas y alertas'
+UNION ALL SELECT 'Contenido y aprobaciones' modulo,count(*) registros FROM public.crm_contenido t JOIN lote l ON l.id=t.id AND l.modulo='Contenido y aprobaciones'
+UNION ALL SELECT 'Anuncios / calendario editorial' modulo,count(*) registros FROM public.crm_anuncio t JOIN lote l ON l.id=t.id AND l.modulo='Anuncios / calendario editorial'
+UNION ALL SELECT 'ENTREGABLE' modulo,count(*) registros FROM public.crm_trabajo_servicio t JOIN lote l ON l.id=t.id AND l.modulo='ENTREGABLE'
+UNION ALL SELECT 'RECOMENDACION' modulo,count(*) registros FROM public.crm_trabajo_servicio t JOIN lote l ON l.id=t.id AND l.modulo='RECOMENDACION'
+UNION ALL SELECT 'AJUSTE' modulo,count(*) registros FROM public.crm_trabajo_servicio t JOIN lote l ON l.id=t.id AND l.modulo='AJUSTE'
+UNION ALL SELECT 'INFORME' modulo,count(*) registros FROM public.crm_trabajo_servicio t JOIN lote l ON l.id=t.id AND l.modulo='INFORME'
+UNION ALL SELECT 'Automatizaciones inactivas' modulo,count(*) registros FROM public.crm_automatizacion t JOIN lote l ON l.id=t.id AND l.modulo='Automatizaciones inactivas'
+UNION ALL SELECT 'Campos personalizados' modulo,count(*) registros FROM public.crm_campo t JOIN lote l ON l.id=t.id AND l.modulo='Campos personalizados'
+UNION ALL SELECT 'Notas' modulo,count(*) registros FROM public.crm_nota t JOIN lote l ON l.id=t.id AND l.modulo='Notas'
+UNION ALL SELECT 'Eventos del CRM' modulo,count(*) registros FROM public.crm_evento t JOIN lote l ON l.id=t.id AND l.modulo='Eventos del CRM'
+UNION ALL SELECT 'Auditoría de la carga' modulo,count(*) registros FROM public.crm_auditoria t JOIN lote l ON l.id=t.id AND l.modulo='Auditoría de la carga'
+UNION ALL SELECT 'Rendimiento publicitario DEMO' modulo,count(*) registros FROM public.crm_publicidad_demo t JOIN lote l ON l.id=t.id AND l.modulo='Rendimiento publicitario DEMO'
+UNION ALL SELECT 'Métricas diarias',count(*) FROM public.metrica_operativa m JOIN lote l ON l.id=m.id_campana AND l.modulo='Campañas'
+UNION ALL SELECT 'Estadísticas de anuncios',count(*) FROM public.crm_anuncio_metrica m JOIN lote l ON l.id=m.anuncio_id AND l.modulo='Anuncios / calendario editorial'
+UNION ALL SELECT 'Resultados del mapa',count(*) FROM public.marketing_resultado_geografico g JOIN public.metrica_operativa m ON m.id_metrica=g.metrica_id JOIN lote l ON l.id=m.id_campana AND l.modulo='Campañas'
+UNION ALL SELECT 'Países con resultados',count(DISTINCT m.pais) FROM public.crm_anuncio_metrica m JOIN lote l ON l.id=m.anuncio_id AND l.modulo='Anuncios / calendario editorial'
+UNION ALL SELECT 'Indicadores',count(*) FROM public.indicador_kpi m JOIN lote l ON l.id=m.id_campana AND l.modulo='Campañas'
+UNION ALL SELECT 'Reportes',count(*) FROM public.reporte m JOIN lote l ON l.id=m.id_campana AND l.modulo='Campañas'
 ORDER BY modulo;

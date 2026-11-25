@@ -31,7 +31,7 @@ class PoblarDemo {
                 try (var r=s.executeQuery(Files.readString(Path.of("scripts/verificar-demo-10.sql")))) {
                     while (r.next()) System.out.println(r.getString(1)+": "+r.getLong(2));
                 }
-                try (var r=s.executeQuery("select count(*) from public.usuario where correo like 'demo10.%@example.invalid' and (id_supabase is not null or password_hash is not null or estado<>'INACTIVO')")) {
+                try (var r=s.executeQuery("select count(*) from public.usuario u where (u.correo like 'demo10.%@example.invalid' or u.id_usuario in(select r.id from public.crm_empresa_migracion m cross join lateral jsonb_to_recordset(m.datos->'registros') r(modulo text,lote int,id bigint) where m.tipo='lote_marketing_20261124' and m.registro_id=0 and r.modulo in('Trabajadores de prueba','Perfiles de cliente de prueba'))) and (u.id_supabase is not null or u.password_hash is not null or u.estado<>'INACTIVO')")) {
                     r.next(); if (r.getLong(1)!=0) throw new IllegalStateException("Revisa los accesos de prueba");
                 }
                 System.out.println("Verificación independiente terminada; conexión de solo lectura.");
@@ -55,6 +55,15 @@ class PoblarDemo {
             try {
                 s.execute("set local lock_timeout='10s'");
                 s.execute("set local statement_timeout='75s'");
+                if (List.of(args).contains("--normalizar")) {
+                    s.execute(Files.readString(Path.of("scripts/normalizar-registros-marketing.sql")));
+                    try (var r=s.executeQuery("select modulo,registros from normalizacion_resumen order by modulo")) {
+                        while(r.next()) System.out.println(r.getString(1)+": "+r.getLong(2));
+                    }
+                    if (List.of(args).contains("--aplicar")) { c.commit(); System.out.println("CONFIRMADO: presentación actualizada; se conservaron IDs, métricas y accesos."); }
+                    else { c.rollback(); System.out.println("COMPROBADO y REVERTIDO: presentación validada sin guardar cambios."); }
+                    return;
+                }
                 boolean faltaGeografia;
                 try (var r=s.executeQuery("select to_regclass('public.marketing_ubicacion') is null or to_regclass('public.marketing_cobertura') is null or to_regclass('public.marketing_resultado_geografico') is null")) { r.next(); faltaGeografia=r.getBoolean(1); }
                 if (faltaGeografia) {
@@ -66,6 +75,7 @@ class PoblarDemo {
                 s.execute(Files.readString(Path.of("scripts/metricas-demo-mockaroo.sql")));
                 String sql = Files.readString(Path.of("scripts/poblar-demo-10.sql"));
                 s.execute(sql);
+                s.execute(Files.readString(Path.of("scripts/normalizar-registros-marketing.sql")));
                 try (var r = s.executeQuery("select modulo,registros from pg_temp.demo_resumen order by modulo")) {
                     while (r.next()) System.out.println(r.getString(1) + ": " + r.getLong(2));
                 }
